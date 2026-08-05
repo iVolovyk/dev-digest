@@ -34,4 +34,6 @@ network. `npm run typecheck` doubles as the build.
 - `docs/` — read when you need the rationale behind a decision here.
 - `specs/` — read when implementing a feature that has a written spec (this is
   also the slot L05's Project Context Folder eventually feeds into the prompt).
-- `INSIGHTS.md` — check before debugging; append after any non-obvious fix.
+- `INSIGHTS.md` — read via the `engineering-insights` skill before debugging
+  something that feels familiar; the skill appends to it at the end of a
+  non-trivial task.

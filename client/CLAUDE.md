@@ -27,4 +27,6 @@ separately by `../e2e`, not by this package's tests.
 - `README.md` — read when you need the UI route map / which hook hits which endpoint.
 - `docs/` — read when you need the rationale behind a UI/architecture decision here.
 - `specs/` — read when implementing a feature that has a written spec.
-- `INSIGHTS.md` — check before debugging; append after any non-obvious fix.
+- `INSIGHTS.md` — read via the `engineering-insights` skill before debugging
+  something that feels familiar; the skill appends to it at the end of a
+  non-trivial task.
