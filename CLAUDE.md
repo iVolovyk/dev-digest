@@ -15,7 +15,7 @@ Per-package: `pnpm dev` / `pnpm test` / `pnpm typecheck` (run from that package'
 | Folder | Package | Role | Port |
 |---|---|---|---|
 | server/ | @devdigest/api | Fastify + Drizzle/Postgres | 3001 |
-| client/ | @devdigest/web | Next.js 15 studio | 3000 |
+| client/ | @devdigest/web | Next.js 15 studio | 3002 |
 | reviewer-core/ | @devdigest/reviewer-core | pure review engine | — |
 | e2e/ | @devdigest/e2e | deterministic browser e2e | — |
 
