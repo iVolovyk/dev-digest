@@ -7,10 +7,12 @@
 
 import React from "react";
 import { Icon, Badge } from "@devdigest/ui";
-import type { ReviewRecord, Verdict } from "@devdigest/shared";
+import type { ReviewRecord, RunSummary, Verdict } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
+import { formatTokens } from "../RunTraceDrawer/helpers";
 import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
+import { formatCost } from "@/lib/format-cost";
 
 const VERDICT_COLOR: Record<string, string> = {
   request_changes: "var(--crit)",
@@ -25,6 +27,7 @@ function formatWhen(iso: string): string {
 
 export function ReviewRunAccordion({
   review,
+  run,
   prId,
   defaultOpen = false,
   repoFullName,
@@ -33,6 +36,10 @@ export function ReviewRunAccordion({
   targetNonce = 0,
 }: {
   review: ReviewRecord;
+  /** The agent_runs row this review came from (looked up by review.run_id);
+   *  carries cost/tokens, which aren't denormalized onto the review row.
+   *  Undefined for very old data with no matching run. */
+  run?: RunSummary;
   prId: string;
   defaultOpen?: boolean;
   repoFullName?: string | null;
@@ -102,6 +109,14 @@ export function ReviewRunAccordion({
           <Badge mono color="var(--text-secondary)">
             {review.score}
           </Badge>
+        )}
+        {run?.cost_usd != null && (
+          <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            {formatCost(run.cost_usd)}
+            {run.tokens_in != null && run.tokens_out != null
+              ? ` · ${formatTokens(run.tokens_in, run.tokens_out)}`
+              : ""}
+          </span>
         )}
         <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
           {formatWhen(review.created_at)}

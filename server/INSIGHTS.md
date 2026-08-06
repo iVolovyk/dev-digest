@@ -43,7 +43,15 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-06** — `pnpm test` in `server/` reliably fails every
+  `*.it.test.ts` suite with `Error: Hook timed out in 120000ms` in this
+  sandbox — including run alone (`pnpm exec vitest run
+  test/reviews.it.test.ts`) and on a clean, unmodified `main` (verified via
+  `git stash`). It's testcontainers failing to spin up its OWN throwaway
+  Postgres within the hook timeout here, unrelated to the already-running
+  `devdigest-postgres` docker-compose container used for `pnpm dev`. Not a
+  regression signal from a code change — after touching `server/`, judge
+  correctness from the hermetic (non-`.it.`) suite passing, not this one.
 
 ## Open Questions
 
