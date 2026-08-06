@@ -35,4 +35,6 @@ A DB-backed test MUST use the `.it.test.ts` suffix or the CI split breaks.
 - `README.md` — read when you need the DI/request flow or the module→route map.
 - `docs/` — read when you need the rationale (not just the "what") behind a decision here.
 - `specs/` — read when implementing a feature that has a written spec.
-- `INSIGHTS.md` — check before debugging; append after any non-obvious fix.
+- `INSIGHTS.md` — read via the `engineering-insights` skill before debugging
+  something that feels familiar; the skill appends to it at the end of a
+  non-trivial task.

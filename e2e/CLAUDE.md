@@ -34,4 +34,6 @@ run in order against one shared browser session by `run.ts`.
 - `README.md` — read when you need the flow-file anatomy or the coverage table.
 - `specs/*.flow.json` — read/edit when adding or changing a UI-flow assertion.
 - `docs/` — read when you need the rationale behind a decision here.
-- `INSIGHTS.md` — check before debugging; append after any non-obvious fix.
+- `INSIGHTS.md` — read via the `engineering-insights` skill before debugging
+  something that feels familiar; the skill appends to it at the end of a
+  non-trivial task.

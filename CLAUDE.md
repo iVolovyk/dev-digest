@@ -33,4 +33,11 @@ Per-package: `pnpm dev` / `pnpm test` / `pnpm typecheck` (run from that package'
 - `<module>/CLAUDE.md` — auto-loads when you touch files inside that module; don't duplicate its content here.
 - `<module>/README.md` — read when you need that module's architecture/flow diagrams.
 - `<module>/specs/` — read when implementing against a written feature spec.
-- `<module>/INSIGHTS.md` — read when something feels like it's been hit before; append after resolving anything surprising.
+- Reading is mandatory: the moment a request names or implies a module, use
+  the `engineering-insights` skill to read that module's `INSIGHTS.md` before
+  responding — not just before editing code. Treat it as high-confidence
+  guidance.
+- Writing is conditional: at the end of a non-trivial task, run
+  `engineering-insights` to check whether the finding is already recorded and,
+  if not, add it to `<module>/INSIGHTS.md`. Write nothing when the session
+  produced nothing substantial, or when the file already covers it.
