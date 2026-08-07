@@ -173,6 +173,15 @@ export const PrMeta = z.object({
   // Sum of agent_runs.cost_usd for this PR, all-time (list endpoint only);
   // null when no run has recorded a cost yet.
   cost_usd: z.number().nullish(),
+  // Latest-review findings tally by severity (list endpoint only); null
+  // until reviewed, all-zero once reviewed with no findings.
+  findings: z
+    .object({
+      critical: z.number().int(),
+      warning: z.number().int(),
+      suggestion: z.number().int(),
+    })
+    .nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

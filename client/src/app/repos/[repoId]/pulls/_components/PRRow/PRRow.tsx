@@ -4,12 +4,15 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
-import type { PrMeta } from "@/lib/types";
+import { Icon, Avatar, Badge, CircularScore, Popover, SeverityBadge } from "@devdigest/ui";
+import type { PrMeta, Severity } from "@/lib/types";
 import { formatCost } from "@/lib/format-cost";
-import { SIZE_COLOR, STATUS_META } from "../../constants";
+import { SIZE_COLOR, STATUS_META, SEVERITY_TO_FINDINGS_KEY } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
 import { s } from "../../styles";
+import { FindingsPopoverContent } from "./FindingsPopoverContent";
+
+const SEVERITIES = Object.keys(SEVERITY_TO_FINDINGS_KEY) as Severity[];
 
 export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
   const t = useTranslations("prReview");
@@ -18,6 +21,7 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
   const st = STATUS_META[pr.status] ?? STATUS_META.needs_review!;
   const { size, lines } = sizeOf(pr);
   const reviewed = pr.score != null; // null score ⇒ PR has never been reviewed
+  const nonZeroSeverities = SEVERITIES.filter((sev) => (pr.findings?.[SEVERITY_TO_FINDINGS_KEY[sev]] ?? 0) > 0);
   return (
     <div
       onMouseEnter={() => setH(true)}
@@ -50,6 +54,28 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
       <div style={s.scoreCell}>
         {reviewed ? (
           <CircularScore score={pr.score!} size={34} stroke={3} />
+        ) : (
+          <span style={s.muted}>—</span>
+        )}
+      </div>
+      <div data-testid="pr-findings" style={s.findingsCell} onClick={(e) => e.stopPropagation()}>
+        {nonZeroSeverities.length > 0 ? (
+          nonZeroSeverities.map((sev) => (
+            <Popover
+              key={sev}
+              width={320}
+              trigger={
+                <SeverityBadge
+                  severity={sev}
+                  count={pr.findings![SEVERITY_TO_FINDINGS_KEY[sev]]}
+                  compact
+                  variant="outline"
+                />
+              }
+            >
+              <FindingsPopoverContent prId={pr.id ?? null} severity={sev} />
+            </Popover>
+          ))
         ) : (
           <span style={s.muted}>—</span>
         )}

@@ -40,9 +40,53 @@ the written design brief — rejected as unnecessary chrome that the real
 screens don't show. Don't "fix" this later by adding it back; the omission
 was intentional and user-approved, not an oversight.
 
+### 2026-08-06 — Extended `PrMeta` for list-row findings, ignored the `PrRowView` stub
+
+**What:** added a `findings: {critical,warning,suggestion}` field directly to
+the `PrMeta` contract (both vendor copies) and consumed it straight off `pr`
+in `PRRow.tsx`, rather than mapping through the pre-existing
+`PrRowView.findings` type in `client/src/lib/types.ts`.
+**Why:** `PrRowView.findings` uses uppercase keys (`{CRITICAL,WARNING,
+SUGGESTION}`), but the already-tested backend aggregator
+(`server/src/modules/pulls/status.ts`'s `SeverityCounts`/`rollupSeverities`)
+uses lowercase keys — using the stub as-is would need a second remapping
+layer for no benefit, and `PRRow.tsx` already consumes every other field
+straight off `PrMeta`, never through a view-model.
+**Rejected:** producing/consuming `PrRowView` for real. Left the stub in
+place (unrelated dead code, out of scope to delete) but it still has zero
+references — a future session touching PR-list types should not assume it's
+wired up.
+
+### 2026-08-07 — PR-detail severity indicator is per-run (Timeline), not a page-wide toolbar
+
+**What:** removed a page-wide severity toolbar above "Review runs" (3
+aggregate `SeverityBadge`s filtering every `ReviewRunAccordion`
+simultaneously) and replaced it with clickable severity icons on each
+individual run row inside `RunHistory` (the Timeline), each opening a
+popover scoped to just that run's findings of that severity. No PR-wide
+filter state exists anymore — removed `?severity=` from the URL, and the
+`severityFilter` prop from `FindingsPanel`/`ReviewRunAccordion`/
+`FindingsTab`.
+**Why:** the actual reference screenshot (PR detail, "Agent runs" tab)
+shows small icon+count badges attached to each Timeline run row — not a
+section-level toolbar; user pointed at the screenshot and asked for the
+Timeline rows specifically, and confirmed removing the aggregate toolbar
+rather than keeping both.
+**Rejected:** keeping the aggregate PR-wide toolbar alongside the new
+per-run icons — rejected by the user as two different ways to filter the
+same thing, which would confuse rather than help.
+
 ## What Works
 
-_None yet._
+- **2026-08-07** — severity badges (PR list `PRRow`, PR-detail `RunHistory`
+  rows) render ONLY for severities with count > 0, with a plain fallback
+  (a muted "—" dash on the list, plain "{n} finding(s)" text on the
+  Timeline) when every count is zero — never a 0-count badge. This matches
+  the reference screenshots (e.g. a PR with only suggestions shows a single
+  💡 badge, not three badges with two reading "0"), discovered by re-reading
+  the screenshot closely, not from an explicit instruction.
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx`,
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.tsx`
 
 ## What Doesn't Work
 
@@ -62,6 +106,20 @@ _None yet._
   field (no build error, since the client's own copy just lacks it).
   `client/src/vendor/shared/contracts/platform.ts`,
   `server/src/vendor/shared/contracts/platform.ts`
+
+- **2026-08-07** — the enriched "findings of one severity" popover body
+  (title + `CategoryTag` + `MonoLink file:line` + `ConfidenceNum` +
+  truncated rationale) is a single shared presentational component,
+  `FindingsSeverityList`, living under the PR-**detail** route
+  (`pulls/[number]/_components/FindingsSeverityList/`) and imported
+  cross-boundary by the PR-**list** route's `PRRow/FindingsPopoverContent.tsx`
+  (`../../[number]/_components/FindingsSeverityList/...`). This extends the
+  cross-boundary precedent already noted for `lineLabel` — list-page
+  components reaching into detail-page helpers/components is an accepted
+  pattern here, not an oversight. Add new findings-list consumers (list row
+  popover, Timeline run popover, any future one) by reusing this component
+  rather than re-implementing the enriched row markup.
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsSeverityList/FindingsSeverityList.tsx`
 
 ## Tool & Library Notes
 

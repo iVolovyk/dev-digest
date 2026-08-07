@@ -29,6 +29,7 @@ import {
   Modal,
   Tabs,
   Dropdown,
+  Popover,
   FormField,
   TextInput,
   SelectInput,
@@ -191,6 +192,11 @@ export function Gallery() {
             { label: "Configure…", icon: "Settings", muted: true },
           ]}
         />
+        <Popover trigger={<Button kind="secondary" iconRight="ChevronDown">Popover</Button>}>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            Click-toggled, arbitrary content — closes on outside click or Escape.
+          </div>
+        </Popover>
         <Button kind="ghost" onClick={() => setDrawer(true)}>
           Open Drawer
         </Button>

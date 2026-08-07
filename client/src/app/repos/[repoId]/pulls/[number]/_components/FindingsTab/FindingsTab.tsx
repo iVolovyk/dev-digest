@@ -80,6 +80,15 @@ export function FindingsTab({
     return m;
   }, [prRuns]);
 
+  // Per-run findings for the Timeline's clickable severity icons — reviews
+  // already carry their own findings; the Timeline only has RunSummary
+  // (counts, no Finding objects), so key them by run_id here.
+  const findingsByRunId = React.useMemo(() => {
+    const m = new Map<string, FindingRecord[]>();
+    for (const r of runs) if (r.run_id) m.set(r.run_id, r.findings);
+    return m;
+  }, [runs]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -140,6 +149,7 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            findingsByRunId={findingsByRunId}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}

@@ -5,9 +5,9 @@
  * and shows the review score ring.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { RunSummary } from "@devdigest/shared";
+import type { RunSummary, FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 import { RunHistory } from "./RunHistory";
 
@@ -35,12 +35,34 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(runs: RunSummary[], findingsByRunId?: Map<string, FindingRecord[]>) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} onOpenTrace={() => {}} findingsByRunId={findingsByRunId} />
     </NextIntlClientProvider>,
   );
+}
+
+function finding(o: Partial<FindingRecord>): FindingRecord {
+  return {
+    id: "f1",
+    severity: "CRITICAL",
+    category: "security",
+    title: "Hardcoded Stripe secret key",
+    file: "src/config.ts",
+    start_line: 12,
+    end_line: 12,
+    rationale: "Line 12 contains a literal string starting with sk_live_.",
+    suggestion: null,
+    confidence: 0.98,
+    kind: "finding",
+    trifecta_components: null,
+    evidence: null,
+    review_id: "r1",
+    accepted_at: null,
+    dismissed_at: null,
+    ...o,
+  };
 }
 
 describe("RunHistory — outcome badge", () => {
@@ -72,5 +94,30 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — per-run severity icons", () => {
+  it("renders a clickable icon only for severities with findings > 0", () => {
+    const findingsByRunId = new Map([
+      ["run-1", [finding({ severity: "CRITICAL" }), finding({ id: "f2", severity: "WARNING" })]],
+    ]);
+    renderRuns([run({ status: "done", findings_count: 2, blockers: 1, score: 61 })], findingsByRunId);
+    // One badge per non-zero severity (1 CRITICAL, 1 WARNING) — no SUGGESTION badge.
+    expect(screen.getAllByText("1")).toHaveLength(2);
+    expect(screen.queryByText(/2 finding/)).not.toBeInTheDocument();
+  });
+
+  it("clicking a severity icon opens a popover with that run's matching findings", () => {
+    const findingsByRunId = new Map([["run-1", [finding({})]]]);
+    renderRuns([run({ status: "done", findings_count: 1, blockers: 1, score: 61 })], findingsByRunId);
+    fireEvent.click(screen.getByText("1"));
+    expect(screen.getByText("Hardcoded Stripe secret key")).toBeInTheDocument();
+    expect(screen.getByText("security")).toBeInTheDocument();
+  });
+
+  it("falls back to plain findings text when no findingsByRunId entry exists", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 0, score: 80 })]);
+    expect(screen.getByText(/3 finding/)).toBeInTheDocument();
   });
 });
