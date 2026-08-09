@@ -2,8 +2,10 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
-import type { RunSummary, PrCommit } from "@devdigest/shared";
+import { Badge, Icon, CircularScore, Popover, SeverityBadge, type IconName } from "@devdigest/ui";
+import type { RunSummary, PrCommit, FindingRecord } from "@devdigest/shared";
+import { FindingsSeverityList } from "../FindingsSeverityList/FindingsSeverityList";
+import { SEVERITIES, countBySeverity } from "./helpers";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -87,12 +89,16 @@ function tsOf(s: string | null | undefined): number {
 export function RunHistory({
   runs,
   commits = [],
+  findingsByRunId,
   onOpenTrace,
   onGoToReview,
   onDelete,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
+  /** This run's findings, keyed by run_id — drives the clickable severity
+   *  icons below each run (RunSummary itself only carries counts). */
+  findingsByRunId?: Map<string, FindingRecord[]>;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -149,6 +155,9 @@ export function RunHistory({
         const r = item.run;
         const o = outcomeOf(r);
         const settled = r.status === "done";
+        const runFindings = findingsByRunId?.get(r.run_id) ?? [];
+        const severityCounts = countBySeverity(runFindings);
+        const nonZeroSeverities = SEVERITIES.filter((sev) => severityCounts[sev] > 0);
         return (
           <div key={`run:${r.run_id}`} style={rowStyle}>
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
@@ -189,9 +198,37 @@ export function RunHistory({
                 </div>
               )}
               {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
-                  {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {nonZeroSeverities.length > 0 ? (
+                    nonZeroSeverities.map((sev) => (
+                      <Popover
+                        key={sev}
+                        width={320}
+                        trigger={
+                          <SeverityBadge
+                            severity={sev}
+                            count={severityCounts[sev]}
+                            compact
+                            variant="outline"
+                          />
+                        }
+                      >
+                        <FindingsSeverityList
+                          findings={runFindings.filter((f) => f.severity === sev)}
+                          emptyLabel={t("timeline.findingsPopoverEmpty")}
+                        />
+                      </Popover>
+                    ))
+                  ) : (r.findings_count ?? 0) > 0 ? (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {t("runStatus.findings", { count: r.findings_count ?? 0 })}
+                    </span>
+                  ) : null}
+                  {(r.blockers ?? 0) > 0 && (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {t("runStatus.blockers", { count: r.blockers ?? 0 })}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

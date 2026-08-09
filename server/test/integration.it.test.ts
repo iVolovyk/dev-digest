@@ -131,6 +131,78 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     await app.close();
   });
 
+  it("GET /repos/:id/pulls surfaces the latest review's findings tally by severity", async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new MockGitHubClient() },
+    });
+    // A freshly-created repo (not the shared seeded one, which already carries
+    // a sample review + findings) so its imported PR is guaranteed unreviewed.
+    const create = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      payload: { url: 'https://github.com/acme/findings-fixture' },
+    });
+    const repoId = create.json().id as string;
+    const before = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const pr = before.json()[0] as { id: string; findings: unknown };
+    // Never reviewed → findings is null, not an all-zero tally.
+    expect(pr.findings).toBeNull();
+
+    const [prRow] = await pg.handle.db
+      .select()
+      .from(t.pullRequests)
+      .where(eq(t.pullRequests.id, pr.id));
+    const [review] = await pg.handle.db
+      .insert(t.reviews)
+      .values({ workspaceId: prRow!.workspaceId, prId: prRow!.id, kind: 'review', score: 61 })
+      .returning();
+    await pg.handle.db.insert(t.findings).values([
+      {
+        reviewId: review!.id,
+        file: 'a.ts',
+        startLine: 1,
+        endLine: 1,
+        severity: 'CRITICAL',
+        category: 'security',
+        title: 'Hardcoded secret',
+        rationale: 'Exposes a credential.',
+        confidence: 0.9,
+      },
+      {
+        reviewId: review!.id,
+        file: 'b.ts',
+        startLine: 2,
+        endLine: 2,
+        severity: 'WARNING',
+        category: 'bug',
+        title: 'N+1 query',
+        rationale: 'Loops a query per row.',
+        confidence: 0.8,
+      },
+      {
+        reviewId: review!.id,
+        file: 'b.ts',
+        startLine: 3,
+        endLine: 3,
+        severity: 'WARNING',
+        category: 'bug',
+        title: 'Missing Retry-After',
+        rationale: '429 branch omits the header.',
+        confidence: 0.8,
+      },
+    ]);
+
+    const after = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const reviewedPr = (
+      after.json() as { id: string; findings: { critical: number; warning: number; suggestion: number } }[]
+    ).find((p) => p.id === pr.id)!;
+    expect(reviewedPr.findings).toEqual({ critical: 1, warning: 2, suggestion: 0 });
+    await app.close();
+  });
+
   it('POST /repos/:id/poll syncs PR list and does NOT trigger a review', async () => {
     const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
     const app = await buildApp({

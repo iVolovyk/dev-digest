@@ -24,7 +24,7 @@ export const SIZE_COLOR: Record<string, string> = {
 };
 
 /** Grid template for both the header row and PR rows. */
-export const GRID = "1fr 132px 92px 60px 118px 78px";
+export const GRID = "1fr 132px 92px 60px 108px 118px 70px 78px";
 
 /** Line-count thresholds for the S/M/L size bucket. */
 export const SIZE_SMALL_MAX = 100;
@@ -44,9 +44,18 @@ export const COLUMN_KEYS: string[] = [
   "author",
   "size",
   "score",
+  "findings",
   "status",
+  "cost",
   "updated",
 ];
+
+/** `PrMeta.findings` key (lowercase) for each `Severity` (uppercase enum). */
+export const SEVERITY_TO_FINDINGS_KEY = {
+  CRITICAL: "critical",
+  WARNING: "warning",
+  SUGGESTION: "suggestion",
+} as const;
 
 /** Number of skeleton rows shown while loading. */
 export const SKELETON_ROWS = 4;

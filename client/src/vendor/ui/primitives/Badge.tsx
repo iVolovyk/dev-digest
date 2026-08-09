@@ -53,13 +53,19 @@ export function SeverityBadge({
   severity,
   count,
   compact,
+  variant = "solid",
 }: {
   severity: Severity;
   count?: number;
   compact?: boolean;
+  /** "solid" (default): filled background chip. "outline": no background,
+   *  just a colored icon/count under a dotted underline — used for compact
+   *  count summaries (PR list findings column, Timeline run icons). */
+  variant?: "solid" | "outline";
 }) {
   const s = SEV[severity];
   const I = Icon[s.icon];
+  const outline = variant === "outline";
   return (
     <span
       style={{
@@ -67,11 +73,13 @@ export function SeverityBadge({
         alignItems: "center",
         gap: 6,
         padding: compact ? "2px 6px" : "3px 9px",
-        borderRadius: 5,
+        paddingBottom: outline ? 3 : undefined,
+        borderRadius: outline ? 0 : 5,
+        borderBottom: outline ? `1.5px dotted ${s.c}` : undefined,
         fontSize: 12,
         fontWeight: 600,
         color: s.c,
-        background: s.bg,
+        background: outline ? "transparent" : s.bg,
         textTransform: "uppercase",
         letterSpacing: "0.04em",
       }}

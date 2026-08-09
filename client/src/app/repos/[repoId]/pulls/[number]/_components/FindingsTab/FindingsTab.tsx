@@ -71,6 +71,24 @@ export function FindingsTab({
     setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
   }, []);
 
+  // Cost/tokens for the verdict-panel header live on the run row, not the
+  // review row (no FK denorm onto reviews) — look each review's run up by
+  // review.run_id from the already-fetched Timeline data.
+  const runsById = React.useMemo(() => {
+    const m = new Map<string, RunSummary>();
+    for (const r of prRuns ?? []) m.set(r.run_id, r);
+    return m;
+  }, [prRuns]);
+
+  // Per-run findings for the Timeline's clickable severity icons — reviews
+  // already carry their own findings; the Timeline only has RunSummary
+  // (counts, no Finding objects), so key them by run_id here.
+  const findingsByRunId = React.useMemo(() => {
+    const m = new Map<string, FindingRecord[]>();
+    for (const r of runs) if (r.run_id) m.set(r.run_id, r.findings);
+    return m;
+  }, [runs]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -131,6 +149,7 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            findingsByRunId={findingsByRunId}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
@@ -158,6 +177,7 @@ export function FindingsTab({
           <ReviewRunAccordion
             key={review.id}
             review={review}
+            run={review.run_id ? runsById.get(review.run_id) : undefined}
             prId={prId}
             defaultOpen={i === 0}
             repoFullName={repoFullName}

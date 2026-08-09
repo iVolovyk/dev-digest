@@ -40,6 +40,11 @@ export const s = {
   } satisfies CSSProperties,
   sizeBadgeBorder: (color: string): CSSProperties => ({ border: `1px solid ${color}` }),
   scoreCell: { display: "flex", alignItems: "center" } satisfies CSSProperties,
+  findingsCell: { display: "flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
+  costCell: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
   updatedCell: {
     fontSize: 12,
     color: "var(--text-muted)",
@@ -87,7 +92,9 @@ export const s = {
     margin: "14px 32px 44px",
     border: "1px solid var(--border)",
     borderRadius: 10,
-    overflow: "hidden",
+    // NOT overflow:hidden — a findings-badge Popover renders below the row
+    // it's in and must be able to escape the card's box; the header row
+    // below rounds its own top corners instead of relying on this to clip.
     background: "var(--bg-elevated)",
   } satisfies CSSProperties,
   headRow: {
@@ -96,6 +103,8 @@ export const s = {
     gap: 14,
     padding: "10px 20px",
     borderBottom: "1px solid var(--border)",
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
     background: "var(--bg-surface)",
     fontSize: 12,
     fontWeight: 700,
