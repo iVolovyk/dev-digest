@@ -42,7 +42,7 @@ export default async function repoIntelRoutes(appBase: FastifyInstance) {
 
   app.post(
     '/repos/:id/resync',
-    { schema: { params: IdParams } },
+    { schema: { params: IdParams }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const { workspaceId } = await getContext(container, req);
       // 202 even when enqueue fails (no handler / DB hiccup) so the UI can

@@ -48,14 +48,21 @@ export default function PRDetailPage() {
   const liveRunIds = (activeRuns ?? []).map((r) => r.run_id);
   const reviewRunning = liveRunIds.length > 0;
   const cancel = useCancelRun();
-  const invalidateActiveRuns = () => {
+  const invalidateActiveRuns = React.useCallback(() => {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-active-runs", prId] });
-  };
+  }, [prId, qc]);
   // When a run settles (done OR failed) refresh the full run history too, so a
   // just-failed run shows up in "Run history" immediately — no page reload.
-  const invalidateRunHistory = () => {
+  const invalidateRunHistory = React.useCallback(() => {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
-  };
+  }, [prId, qc]);
+  // Stable identity so RunStatus's "run just finished" effect doesn't re-fire
+  // on every unrelated re-render of this page.
+  const onRunDone = React.useCallback(() => {
+    invalidateActiveRuns();
+    invalidateRunHistory();
+    refetchReviews();
+  }, [invalidateActiveRuns, invalidateRunHistory, refetchReviews]);
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
@@ -153,11 +160,7 @@ export default function PRDetailPage() {
               if (window.confirm("Delete this run from history? (its logs are removed too)"))
                 deleteRun.mutate(id);
             }}
-            onRunDone={() => {
-              invalidateActiveRuns();
-              invalidateRunHistory();
-              refetchReviews();
-            }}
+            onRunDone={onRunDone}
           />
         )}
 
