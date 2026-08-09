@@ -39,6 +39,20 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-09** — two ways a `dependency-cruiser` rule silently passes over a
+  codebase that violates it. (1) `to.path` matches the **resolved** path, and
+  pnpm resolves to
+  `node_modules/.pnpm/drizzle-orm@0.38.4_postgres@3.4.9/node_modules/drizzle-orm/index.js`
+  — a bare-specifier pattern like `^drizzle-orm$` matches nothing and reports
+  green; use an unanchored `node_modules/(drizzle-orm|postgres)/`. Node builtins
+  are the exception, they stay bare (`fs`, `node:fs`), so anchor those.
+  (2) without `options.tsPreCompilationDeps: true`, `import type` lines vanish
+  before the cruise — and most layer leakage here is type-only (`AgentRow`,
+  `Container`, `RepoIntel`). Always prove a new rule with a throwaway probe file
+  (`printf "import { eq } from 'drizzle-orm';\nexport const p = eq;\n" >
+  src/modules/repos/__arch-probe.ts && pnpm arch`); an orphan file under `src/`
+  is cruised even though nothing imports it. `server/.dependency-cruiser.cjs`
+
 - **2026-08-08** — HTML comments in an agent-instruction file are stripped
   before the content reaches the model: a `<!-- canary BLIP-9090 -->` appended
   to `server/AGENTS.md` was invisible, while `The token is QUUX-3312.` as

@@ -30,6 +30,9 @@ network. `npm run typecheck` doubles as the build.
   "improve" this with keyword denylists.
 
 ## Read when
+- `onion-architecture` skill — read before adding an import here. This package
+  is the innermost ring; `cd server && pnpm arch` fails the build if it grows a
+  filesystem, DB, HTTP, or VCS dependency.
 - `README.md` — read when you need the full pipeline diagram or public API list.
 - `docs/` — read when you need the rationale behind a decision here.
 - `specs/` — read when implementing a feature that has a written spec (this is

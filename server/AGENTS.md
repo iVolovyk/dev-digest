@@ -32,6 +32,9 @@ A DB-backed test MUST use the `.it.test.ts` suffix or the CI split breaks.
   ran it. Schema changes go through `pnpm db:generate`, which adds a new file.
 
 ## Read when
+- `onion-architecture` skill — read BEFORE creating or moving any file under
+  `src/`: which ring it belongs to, what it may import, and `pnpm arch` (the
+  dependency-cruiser gate that checks it).
 - `README.md` — read when you need the DI/request flow or the module→route map.
 - `docs/` — read when you need the rationale (not just the "what") behind a decision here.
 - `specs/` — read when implementing a feature that has a written spec.
