@@ -23,6 +23,24 @@ them here.
 
 ## Decisions
 
+### 2026-08-09 — Local `client/` conventions override the generic frontend skills
+
+**What:** the per-component `index.ts` barrel (44 barrels over 38 component
+folders) and `styles.ts` holding `CSSProperties` objects are deliberate
+project conventions, and `.claude/skills/frontend-architecture/references/
+this-project.md` records them as binding inside `client/` — do NOT "clean
+them up" to match generic guidance.
+**Why:** both lose head-to-head against the general rule but win on
+consistency at this size: Vercel/bulletproof-react argue a per-component
+barrel is pure bundler cost, and the `react-best-practices` skill's Tailwind
+section forbids inline `style={}` objects — yet every existing component here
+does both, so a partial migration is strictly worse than either end state.
+**Rejected:** removing the convenience barrels, and migrating `styles.ts` to
+Tailwind. Both were rejected as drive-by cleanups; either would need to be a
+deliberate, project-wide decision with build profiling behind it.
+`FindingsSeverityList/` and `RunHistory/` are the only two component folders
+with no `index.ts` — that is drift, not an exemption.
+
 ### 2026-08-06 — No `RunCostBadge` component; reuse plain text + `Stat`
 
 **What:** the cost feature's design brief named a dedicated `RunCostBadge`
@@ -93,6 +111,23 @@ same thing, which would confuse rather than help.
 _None yet._
 
 ## Codebase Patterns
+
+- **2026-08-09** — the `@/*` → `./src/*` alias IS configured
+  (`client/tsconfig.json`), but only ~24 imports use it; route components
+  reach for deep relative chains instead, e.g.
+  `import { useTestConnection } from "../../../../../../../lib/hooks"` —
+  seven `../` from a `_components/` leaf. Copying a neighbouring file
+  propagates the chain, and it silently breaks on every folder move. Write
+  `@/lib/...` and `@/components/...` in new code; converting a file you are
+  already editing is fine, a repo-wide sweep is a separate task.
+  `client/src/app/settings/[section]/_components/SettingsView/_components/SettingsApiKeys/SettingsApiKeys.tsx:6`
+
+- **2026-08-09** — `client/AGENTS.md` says feature logic lives in
+  `_components/<Name>/` folders "each with its own `*.test.tsx`". Only 11 of
+  38 component folders actually have one. Read that line as the target, not
+  as a description of the tree — do not assume a component you are changing
+  has test coverage, and do add the test when you create a folder.
+  `find client/src -name '*.test.tsx' -not -path '*/vendor/*' | wc -l`
 
 - **2026-08-06** — `client/src/vendor/shared/contracts/*` is a SEPARATE copy
   of the Zod contracts from `server/src/vendor/shared/contracts/*`, not a
