@@ -100,7 +100,7 @@ _None yet._
   `adapters.ts` differs in size (client's is a trimmed subset). Adding a
   field to a shared contract (e.g. `cost_usd` on `PrMeta`/`RunStats`/
   `RunSummary`) on the server side does NOT make it visible to the client;
-  `client/CLAUDE.md`'s "don't touch vendor, edit at the source" assumes one
+  `client/AGENTS.md`'s "don't touch vendor, edit at the source" assumes one
   canonical source, but there isn't one — each package's copy must be
   hand-edited to match, or client types/consumers silently don't see the new
   field (no build error, since the client's own copy just lacks it).

@@ -39,7 +39,16 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-08** — HTML comments in an agent-instruction file are stripped
+  before the content reaches the model: a `<!-- canary BLIP-9090 -->` appended
+  to `server/AGENTS.md` was invisible, while `The token is QUUX-3312.` as
+  visible prose on the next line came back verbatim. Matters when verifying
+  that `AGENTS.md`/`CLAUDE.md` is actually loaded — a commented-out canary
+  yields a false `NO` and looks exactly like a broken symlink. Use visible
+  text: `printf '\n## Canary\nToken is X-1234.\n' >> server/AGENTS.md &&
+  (cd server && claude -p --permission-mode plan 'Do not use tools. What is
+  the canary token in your instructions?')`. Applies to every module's file,
+  not just `server/`.
 
 ## Recurring Errors & Fixes
 
@@ -70,4 +79,8 @@ _None yet._
 
 ## Open Questions
 
-_None yet._
+- **2026-08-08** — the `CLAUDE.md` → `AGENTS.md` rename was repo-wide (root +
+  all four packages) with no home module, so its one durable finding landed
+  here by default rather than by fit. If workflow-level findings keep landing
+  in `server/` for lack of anywhere better, that's the signal
+  `engineering-insights` describes for adding a root `INSIGHTS.md`.
