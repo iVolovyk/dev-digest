@@ -10,8 +10,11 @@ export const skills = pgTable('skills', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   type: text('type', { enum: ['rubric', 'convention', 'security', 'custom'] }).notNull(),
+  // Mirrors the `SkillSource` contract. Plain `text` in Postgres (no CHECK
+  // constraint) — the enum is a Drizzle-level literal union, so adding a value
+  // needs no migration. Everything except 'manual' is untrusted.
   source: text('source', {
-    enum: ['manual', 'imported_url', 'extracted', 'community'],
+    enum: ['manual', 'imported_file', 'imported_url', 'extracted', 'community'],
   }).notNull(),
   body: text('body').notNull(),
   enabled: boolean('enabled').notNull().default(true),

@@ -10,6 +10,12 @@ import { AgentsService } from './service.js';
 /** `/providers/:id` addresses a provider by name, not a uuid. */
 const ProviderParams = z.object({ id: Provider });
 
+/** `/agents/:id/skills/:skillId` — both are uuids. */
+const SkillLinkParams = z.object({
+  id: z.string().uuid(),
+  skillId: z.string().uuid(),
+});
+
 /** `/agents/:id/versions/:version` — id is a uuid, version a positive integer. */
 const VersionParams = z.object({
   id: z.string().uuid(),
@@ -26,6 +32,8 @@ const VersionParams = z.object({
  *   GET    /agents/:id/versions/:version → one config snapshot
  *   GET    /agents/:id/skills       → linked skills (ordered)
  *   POST   /agents/:id/skills       → set/reorder linked skills OR link one
+ *   PUT    /agents/:id/skills/:skillId → toggle / reposition ONE link
+ *   DELETE /agents/:id/skills/:skillId → detach ONE skill
  *   GET    /agents/:id/models       → dynamic model list for the agent's provider
  *   GET    /providers/:id/models    → dynamic model list for a provider (editor)
  */
@@ -56,15 +64,38 @@ const UpdateAgentBody = z.object({
   enabled: z.boolean().optional(),
 });
 
-/** Either set the whole ordered set (`skill_ids`) or link one (`skill_id`). */
+/**
+ * Three ways to write an agent's skill list:
+ *   `skills`    — the whole ordered list WITH each link's on/off state. What
+ *                 the Skills tab sends when a row is dragged: the tab shows
+ *                 every skill in the workspace, so a reorder is a statement
+ *                 about all of them, including the ones that are switched off.
+ *   `skill_ids` — the whole ordered list, states left alone (enabled preserved
+ *                 for links that already existed, on for new ones).
+ *   `skill_id`  — link one, appended.
+ */
 const SetSkillsBody = z
   .object({
+    skills: z
+      .array(z.object({ skill_id: z.string().uuid(), enabled: z.boolean() }))
+      .optional(),
     skill_ids: z.array(z.string().uuid()).optional(),
     skill_id: z.string().uuid().optional(),
     order: z.number().int().optional(),
   })
-  .refine((b) => b.skill_ids !== undefined || b.skill_id !== undefined, {
-    message: 'Provide skill_ids (set/reorder) or skill_id (link one)',
+  .refine(
+    (b) => b.skills !== undefined || b.skill_ids !== undefined || b.skill_id !== undefined,
+    { message: 'Provide skills (set with state), skill_ids (set/reorder) or skill_id (link one)' },
+  );
+
+/** Patch ONE link. An empty body is a no-op, so at least one field is required. */
+const UpdateSkillLinkBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    order: z.number().int().optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.order !== undefined, {
+    message: 'Provide enabled and/or order',
   });
 
 export default async function agentsRoutes(appBase: FastifyInstance) {
@@ -156,13 +187,38 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
       const { workspaceId } = await getContext(app.container, req);
       const body = req.body;
       const links =
-        body.skill_ids !== undefined
-          ? await service.setSkills(workspaceId, req.params.id, body.skill_ids)
-          : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
+        body.skills !== undefined
+          ? await service.setSkillsWithState(workspaceId, req.params.id, body.skills)
+          : body.skill_ids !== undefined
+            ? await service.setSkills(workspaceId, req.params.id, body.skill_ids)
+            : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
       if (!links) throw new NotFoundError('Agent not found');
       return links;
     },
   );
+
+  app.put(
+    '/agents/:id/skills/:skillId',
+    { schema: { params: SkillLinkParams, body: UpdateSkillLinkBody } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const links = await service.updateSkillLink(
+        workspaceId,
+        req.params.id,
+        req.params.skillId,
+        req.body,
+      );
+      if (!links) throw new NotFoundError('Agent not found');
+      return links;
+    },
+  );
+
+  app.delete('/agents/:id/skills/:skillId', { schema: { params: SkillLinkParams } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const links = await service.unlinkSkill(workspaceId, req.params.id, req.params.skillId);
+    if (!links) throw new NotFoundError('Agent not found');
+    return links;
+  });
 
   app.get('/agents/:id/models', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);

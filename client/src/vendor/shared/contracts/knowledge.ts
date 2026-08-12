@@ -115,8 +115,22 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+// Where a skill's body came from. Everything except 'manual' is UNTRUSTED —
+// the prompt builder delimiter-wraps those bodies and the UI keeps them
+// disabled until a human vets them. `imported_file` = uploaded .md / .zip.
+export const SkillSource = z.enum([
+  'manual',
+  'imported_file',
+  'imported_url',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
+
+/** True when a skill's body must be treated as data, not as trusted instructions. */
+export function isUntrustedSkillSource(source: SkillSource): boolean {
+  return source !== 'manual';
+}
 
 export const Skill = z.object({
   id: z.string(),
@@ -130,6 +144,71 @@ export const Skill = z.object({
   evidence_files: z.array(z.string()).nullish(),
 });
 export type Skill = z.infer<typeof Skill>;
+
+/**
+ * An immutable snapshot of a skill's body, written on every body change so a
+ * past eval run can be replayed against the exact text it scored.
+ */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+/**
+ * Usage stats for one skill.
+ *
+ * NOTE on attribution: a finding is produced by an agent, never by a single
+ * skill — the model doesn't tell us which instruction caused which finding.
+ * `findings_30d` / `accept_rate` therefore describe *runs in which this skill
+ * was injected*, which is correlation, not causation. The UI must say so.
+ */
+export const SkillStats = z.object({
+  /** Agents this skill is linked to (regardless of per-link enabled). */
+  used_by: z.number().int(),
+  /** Links that actually reach the prompt (link enabled AND skill enabled). */
+  enabled_for: z.number().int(),
+  /** Runs in the last 30 days whose prompt contained this skill. */
+  injected_runs_30d: z.number().int(),
+  /** Mean tokens this skill added across those runs; null when never injected. */
+  avg_tokens: z.number().nullable(),
+  /** Token count of the CURRENT body (what the next run would pay). */
+  body_tokens: z.number().int(),
+  findings_30d: z.number().int(),
+  /** accepted / (accepted + dismissed); null when nothing was triaged yet. */
+  accept_rate: z.number().min(0).max(1).nullable(),
+  agents: z.array(
+    z.object({ id: z.string(), name: z.string(), enabled: z.boolean() }),
+  ),
+  by_category: z.array(z.object({ category: z.string(), count: z.number().int() })),
+});
+export type SkillStats = z.infer<typeof SkillStats>;
+
+/** One archive entry the importer deliberately did NOT read. */
+export const SkillImportSkipped = z.object({
+  path: z.string(),
+  reason: z.string(),
+});
+export type SkillImportSkipped = z.infer<typeof SkillImportSkipped>;
+
+/**
+ * A parsed but NOT-YET-PERSISTED skill. `POST /skills/import/preview` returns
+ * this; saving is a separate `POST /skills`, so nothing reaches the DB until
+ * the user confirms what they saw.
+ */
+export const SkillImportCandidate = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  tokens: z.number().int(),
+  /** Executable / unsupported archive entries — listed, never read or run. */
+  skipped: z.array(SkillImportSkipped),
+  warnings: z.array(z.string()),
+});
+export type SkillImportCandidate = z.infer<typeof SkillImportCandidate>;
 
 export const CommunitySkill = z.object({
   name: z.string(),
@@ -188,6 +267,13 @@ export type Agent = z.infer<typeof Agent>;
 export const AgentSkillLink = z.object({
   agent_id: z.string(),
   skill_id: z.string(),
+  /** Position of this skill's block in the assembled prompt (0 = first). */
   order: z.number().int(),
+  /**
+   * Per-agent switch. A disabled link keeps the association (and its order)
+   * but the skill's block is omitted from this agent's prompt — that is what
+   * makes a with-skills / without-skills comparison reproducible.
+   */
+  enabled: z.boolean(),
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;

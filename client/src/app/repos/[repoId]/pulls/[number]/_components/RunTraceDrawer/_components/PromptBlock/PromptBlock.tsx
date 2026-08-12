@@ -5,6 +5,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Icon, Modal } from "@devdigest/ui";
+import { approxTokens } from "@/lib/tokens";
 import { s } from "../../styles";
 import { PromptModalBody } from "../PromptModalBody";
 
@@ -18,6 +19,12 @@ const miniBtnStyle: React.CSSProperties = {
   background: "var(--bg-elevated)",
   color: "var(--text-muted)",
   cursor: "pointer",
+};
+
+const tokenBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "var(--text-muted)",
+  whiteSpace: "nowrap",
 };
 
 export function PromptBlock({ label, text, color }: { label: string; text: string; color: string }) {
@@ -36,6 +43,10 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Client-side estimate (~) — the exact count comes from the server. */}
+          <span style={tokenBadgeStyle} title={t("trace.prompt.tokensTitle")}>
+            {t("trace.prompt.tokens", { n: approxTokens(text || "") })}
+          </span>
           <button
             type="button"
             title={t("trace.prompt.copy")}

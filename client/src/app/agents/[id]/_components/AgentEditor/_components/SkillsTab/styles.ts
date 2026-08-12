@@ -1,0 +1,108 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for SkillsTab. */
+export const s = {
+  wrap: { maxWidth: 900 } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 10 } satisfies CSSProperties,
+  h2: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
+  count: {
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: 999,
+    color: "var(--accent)",
+    background: "var(--accent-bg, rgba(59,130,246,0.12))",
+  } satisfies CSSProperties,
+  search: { position: "relative", marginLeft: "auto", width: 260 } satisfies CSSProperties,
+  searchIcon: {
+    position: "absolute",
+    left: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "var(--text-muted)",
+    pointerEvents: "none",
+  } satisfies CSSProperties,
+  searchInput: {
+    width: "100%",
+    padding: "7px 10px 7px 30px",
+    borderRadius: 7,
+    border: "1px solid var(--border)",
+    background: "var(--bg-elevated)",
+    color: "var(--text-primary)",
+    fontSize: 13,
+    outline: "none",
+  } satisfies CSSProperties,
+  orderHint: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    lineHeight: 1.5,
+    marginBottom: 14,
+  } satisfies CSSProperties,
+  list: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "11px 14px",
+    borderRadius: 8,
+    // Longhand, NOT the `border` shorthand: `rowOn` overrides only the colour,
+    // and React warns ("Removing a style property during rerender") whenever a
+    // rerender drops a longhand that a shorthand also covers.
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "transparent",
+    background: "var(--bg-elevated)",
+  } satisfies CSSProperties,
+  /** Checked rows sit forward; unchecked ones recede. */
+  rowOn: { background: "var(--bg-surface)", borderColor: "var(--border)" } satisfies CSSProperties,
+  rowOff: { opacity: 0.72 } satisfies CSSProperties,
+  rowDragging: { opacity: 0.4 } satisfies CSSProperties,
+  /** `outline`, not a border colour — the row's border is a shorthand and
+      React warns when a rerender mixes shorthand with longhand. */
+  rowDropTarget: { outline: "2px solid var(--accent)", outlineOffset: -1 } satisfies CSSProperties,
+  grip: {
+    display: "grid",
+    placeItems: "center",
+    width: 20,
+    height: 22,
+    flexShrink: 0,
+    padding: 0,
+    border: "none",
+    borderRadius: 4,
+    background: "transparent",
+    color: "var(--text-muted)",
+    cursor: "grab",
+  } satisfies CSSProperties,
+  name: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  nameOff: { color: "var(--text-secondary)", fontWeight: 500 } satisfies CSSProperties,
+  right: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } satisfies CSSProperties,
+  openLink: {
+    display: "inline-grid",
+    placeItems: "center",
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  footer: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  noMatch: {
+    padding: "16px 12px",
+    fontSize: 13,
+    color: "var(--text-muted)",
+    textAlign: "center",
+  } satisfies CSSProperties,
+  loading: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
+} as const;

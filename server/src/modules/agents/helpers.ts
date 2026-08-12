@@ -1,6 +1,13 @@
-import type { Agent, AgentVersion, CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
+import type {
+  Agent,
+  AgentSkillLink,
+  AgentVersion,
+  CiFailOn,
+  Provider,
+  ReviewStrategy,
+} from '@devdigest/shared';
 import { AgentVersionConfig } from '@devdigest/shared';
-import type { AgentRow, AgentVersionRow } from './repository.js';
+import type { AgentRow, AgentVersionRow, LinkedSkillRow } from './repository.js';
 
 /**
  * Pure helpers for the agents module — DB row ⇄ DTO mapping and the
@@ -38,6 +45,20 @@ export function toAgentVersionDto(row: AgentVersionRow): AgentVersion {
     version: row.version,
     config: AgentVersionConfig.parse(row.configJson),
     created_at: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Map one joined `agent_skills` row to the public `AgentSkillLink` DTO. The
+ * link's own `enabled` is carried through — it is a separate switch from the
+ * skill's `enabled`, and the editor has to be able to tell them apart.
+ */
+export function toAgentSkillLink(agentId: string, link: LinkedSkillRow): AgentSkillLink {
+  return {
+    agent_id: agentId,
+    skill_id: link.skill.id,
+    order: link.order,
+    enabled: link.enabled,
   };
 }
 

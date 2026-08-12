@@ -31,13 +31,54 @@ _None yet._
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-12** — a "replace the whole ordered set" endpoint cannot be a plain
+  delete-then-reinsert once the link row carries state of its own.
+  `POST /agents/:id/skills` (`AgentsRepository.setSkills`) is what the Skills
+  tab sends for BOTH attach and reorder, so the first version silently reset
+  `agent_skills.enabled` to the column default: disable a skill, move any row,
+  and it is back on — quietly changing what reaches the model with no toggle
+  touched. Found by exercising the live API in sequence
+  (`PUT .../skills/:id {enabled:false}` → `POST .../skills {skill_ids:[…]}`),
+  not by any test. `setSkills` now reads the previous links, carries `enabled`
+  forward for ids that were already linked, and does the delete+insert in one
+  transaction (an agent with zero skills mid-write would review without them).
+  Regression: `server/test/agents-skills.it.test.ts`.
+  `src/modules/agents/repository.ts`
 
 ## Codebase Patterns
 
-_None yet._
+- **2026-08-12** — `waitForPrRuns` only waits for `agent_runs.status` to go
+  terminal, and `completeAgentRun` is NOT a run's last write: the executor still
+  writes `run_skills` and then `run_traces` after it
+  (`src/modules/reviews/run-executor.ts`). A test asserting on a trace or on
+  per-run stats rows straight after `waitForPrRuns` races those writes. Poll
+  `run_traces` for the runId instead — it is written last, so its presence proves
+  every earlier post-completion write landed.
+  `server/test/skills-injection.it.test.ts` (`waitForTrace`)
+
+- **2026-08-12** — `Tokenizer` has no port in `src/vendor/shared/adapters.ts`;
+  it is declared in the concrete adapter (`src/adapters/tokenizer/index.ts`),
+  so a service that does `import type { Tokenizer }` from there adds a fresh
+  `service-no-concrete-adapter` warning to `pnpm arch` even though the import
+  is type-only (`tsPreCompilationDeps: true`). Until it becomes a real port,
+  re-declare the one-method shape locally
+  (`export interface Tokenizer { count(text: string): number }`) — the
+  container's `TiktokenTokenizer` satisfies it structurally, so
+  `new XService(repo, app.container.tokenizer)` still compiles.
+  `src/modules/skills/service.ts:27`
 
 ## Tool & Library Notes
+
+- **2026-08-12** — `fflate`'s `unzipSync(bytes, { filter })` is the only way to
+  LIST a zip without inflating it: the callback is invoked once per entry with
+  `{ name, size, originalSize }` and returning `false` skips decompression, so
+  `unzipSync(bytes, { filter: (f) => { entries.push(f); return false; } })`
+  returns `{}` while collecting the full manifest. That is what makes an
+  entry-count / inflated-size cap enforceable on an untrusted upload BEFORE
+  the bytes are expanded; a second `unzipSync` with
+  `filter: (f) => f.name === chosen` then inflates the one entry we read.
+  Directory entries come through with a trailing `/`.
+  `src/modules/skills/import.ts:185`
 
 - **2026-08-09** — two ways a `dependency-cruiser` rule silently passes over a
   codebase that violates it. (1) `to.path` matches the **resolved** path, and
@@ -65,6 +106,16 @@ _None yet._
   not just `server/`.
 
 ## Recurring Errors & Fixes
+
+- **2026-08-12** — with 9 `*.it.test.ts` files each starting its OWN Postgres,
+  `pnpm test` intermittently fails ONE suite outright with
+  `Error: Failed to connect to Reaper` (all of that file's tests reported as
+  skipped). It moves between files run to run — twice in a row it was a
+  different suite — because it is contention over testcontainers' shared
+  Ryuk/reaper container, not anything in the code. Re-running the file alone
+  passes. To judge a change, run `pnpm exec vitest run --no-file-parallelism`:
+  27 files / 176 tests green serially, ~2 min. If it persists, clear stale
+  containers first: `docker rm -f $(docker ps -aq --filter label=org.testcontainers=true)`.
 
 - **2026-08-06** — `pnpm test` in `server/` reliably fails every
   `*.it.test.ts` suite with `Error: Hook timed out in 120000ms` in this

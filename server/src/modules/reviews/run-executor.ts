@@ -8,6 +8,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { renderSkillBlocks } from '../_shared/skill-blocks.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -32,6 +33,15 @@ export type RunOutcome = {
   findings: FindingRow[];
   grounding: string;
   raw: Review;
+};
+
+/**
+ * The skills that actually reached one run's prompt: the rendered blocks for
+ * `assemblePrompt`, plus what each cost, for the `run_skills` stats rows.
+ */
+type InjectedSkills = {
+  blocks: string[];
+  used: { skillId: string; skillVersion: number; tokens: number; order: number }[];
 };
 
 /**
@@ -181,6 +191,12 @@ export class ReviewRunExecutor {
       const repoMap = repoIntelOn ? await this.buildRepoMapDigest(pull.repoId, runLog) : undefined;
       const rankNote = repoIntelOn ? await this.buildRankNote(pull.repoId, diff, runLog) : '';
 
+      // L02 — skills linked to THIS agent, rendered into the prompt's
+      // `## Skills / rules` slot. Independent of the repo-intel toggle (a skill
+      // is the user's own instruction, not derived repo context) and, like the
+      // enrichments above, best-effort: no enabled link ⇒ no section at all.
+      const skills = await this.buildSkillBlocks(agent.id, runLog);
+
       const task = taskLine(pull) + rankNote;
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
@@ -200,6 +216,9 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
+        // L02 — linked skills; omitted entirely when none are enabled, so the
+        // prompt is byte-identical to the pre-skills shape.
+        ...(skills.blocks.length ? { skills: skills.blocks } : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -252,6 +271,11 @@ export class ReviewRunExecutor {
         error: null,
         costUsd,
       });
+
+      // Per-run skill attribution (tokens each block added). Best-effort: the
+      // review IS finished at this point, so a stats-only write must never turn
+      // a completed run into a failed one.
+      await this.repo.insertRunSkills(runId, skills.used).catch(() => undefined);
 
       const trace: RunTrace = {
         config: {
@@ -312,6 +336,57 @@ export class ReviewRunExecutor {
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
+    }
+  }
+
+  /**
+   * L02 — render the skills linked to this agent into prompt blocks.
+   *
+   * The link rows come through `container.agentsRepo` (the composition root's
+   * shared repository), NOT by importing `modules/skills` — feature modules are
+   * siblings. The ordering/trust rules live in the pure `_shared/skill-blocks`
+   * renderer, which is why they are unit-testable without Postgres.
+   *
+   * Best-effort like the repo-intel enrichments: any failure degrades to "no
+   * skills" and only surfaces as a Live Log line. When nothing is injected it
+   * logs NOTHING — a without-skills run must look exactly like a pre-skills run
+   * in the log, not just in the prompt.
+   */
+  private async buildSkillBlocks(agentId: string, runLog: RunLogger): Promise<InjectedSkills> {
+    try {
+      // Already ordered by `order`; disabled links are included and dropped by
+      // the renderer (both switches must be on).
+      const links = await this.container.agentsRepo.linkedSkills(agentId);
+      const rendered = renderSkillBlocks(
+        links.map((l) => ({
+          id: l.skill.id,
+          name: l.skill.name,
+          source: l.skill.source,
+          body: l.skill.body,
+          version: l.skill.version,
+          skillEnabled: l.skill.enabled,
+          linkEnabled: l.enabled,
+          order: l.order,
+        })),
+      );
+      if (rendered.length === 0) return { blocks: [], used: [] };
+
+      const used = rendered.map((b) => ({
+        skillId: b.skillId,
+        skillVersion: b.version,
+        tokens: this.container.tokenizer.count(b.text),
+        order: b.order,
+      }));
+      const total = used.reduce((sum, u) => sum + u.tokens, 0);
+      runLog.info(
+        `skills: ${rendered.length} skill(s) injected (~${total} tokens) — ${rendered
+          .map((b) => b.name)
+          .join(', ')}`,
+      );
+      return { blocks: rendered.map((b) => b.text), used };
+    } catch (err) {
+      runLog.info(`skills: skill injection failed — ${(err as Error).message}`);
+      return { blocks: [], used: [] };
     }
   }
 

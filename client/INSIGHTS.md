@@ -158,11 +158,40 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-12** — `Donut` (`@devdigest/ui`) is built for money: its legend
+  renders `{valuePrefix}{value.toFixed(2)}` with `valuePrefix` defaulting to
+  `"$"`. Charting counts (e.g. skill findings by category) MUST pass
+  `valuePrefix=""` or every slice reads `$3.00`; even then the legend still
+  shows `3.00`, since the two-decimal format is not configurable. Accepted as
+  cosmetic in `StatsTab` — don't "fix" it by editing the vendored component.
+  `client/src/app/skills/_components/SkillDetailPanel/_components/StatsTab/StatsTab.tsx`,
+  `client/src/vendor/ui/charts/Donut.tsx:52`
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-12** — the FIRST runtime (non-`import type`) import from
+  `@devdigest/shared` 500s every page that transitively touches it:
+  `Module not found: Can't resolve './contracts/findings.js'` from
+  `src/vendor/shared/index.ts:17`. The vendored barrel is authored for NodeNext
+  (`./contracts/findings.js` → a `.ts` file on disk) and Next's webpack has no
+  `.js`→`.ts` extension alias by default; until now every client import of that
+  package was type-only, TypeScript erased it, and webpack was never asked to
+  resolve the barrel — so the gap was invisible for the whole project's life.
+  `pnpm test` and `pnpm typecheck` both stay green (vitest and tsc resolve it
+  fine), so ONLY a running dev/build catches this. Fixed by
+  `resolve.extensionAlias = { ".js": [".ts", ".tsx", ".js"] }` in
+  `client/next.config.mjs`; if the dev script ever moves to Turbopack that
+  webpack hook is ignored and the error comes back.
+  `client/next.config.mjs`, `client/src/app/skills/_components/SkillCard/SkillCard.tsx:10`
+
+- **2026-08-12** — adding a route makes `pnpm typecheck` fail with
+  `.next/types/validator.ts(NN,52): error TS2344: Type '"/skills"' does not
+  satisfy the constraint 'AppRoutes'` — nothing is wrong with the page.
+  `tsconfig.json` includes `.next/types/**/*.ts`, and Next regenerates
+  `validator.ts` (which lists the new page) before `routes.d.ts` (which holds
+  the `AppRoutes` union), so a half-written cache typechecks against a stale
+  union. Re-run `pnpm typecheck` after `pnpm dev`/`pnpm build` has settled, or
+  `rm -rf .next/types`; do not "fix" the page.
 
 ## Open Questions
 

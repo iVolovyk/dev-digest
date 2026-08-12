@@ -175,6 +175,26 @@ export class ReviewRepository {
     return pullRepo.markReviewed(this.db, prId, sha);
   }
 
+  /**
+   * Record which skills reached THIS run's prompt and what they cost.
+   *
+   * History, not a projection of `agent_skills`: links get toggled, reordered
+   * and unlinked afterwards, so the only honest answer to "which skills did this
+   * run use" is the one written at run time. `onConflictDoNothing` keeps a retry
+   * idempotent (PK is run_id + skill_id); an empty list writes nothing at all,
+   * so a without-skills run leaves no rows behind.
+   */
+  async insertRunSkills(
+    runId: string,
+    rows: { skillId: string; skillVersion: number; tokens: number; order: number }[],
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await this.db
+      .insert(t.runSkills)
+      .values(rows.map((r) => ({ runId, ...r })))
+      .onConflictDoNothing();
+  }
+
   /** Persist the WHOLE run log as ONE document. PK = runId → agent_runs. */
   saveRunTrace(runId: string, trace: RunTrace): Promise<void> {
     return runRepo.saveRunTrace(this.db, runId, trace);
