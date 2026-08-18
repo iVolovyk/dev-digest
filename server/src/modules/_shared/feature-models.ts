@@ -6,7 +6,6 @@ import {
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import * as t from '../../db/schema.js';
-import { rowsToSettings } from './helpers.js';
 
 /**
  * Per-feature model configuration.
@@ -42,7 +41,9 @@ export async function getFeatureModelOverride(
     .select({ key: t.settings.key, value: t.settings.value })
     .from(t.settings)
     .where(eq(t.settings.workspaceId, workspaceId));
-  const fm = (rowsToSettings(rows) as { feature_models?: Record<string, unknown> }).feature_models;
+  const settings: Record<string, unknown> = {};
+  for (const r of rows) settings[r.key] = r.value;
+  const fm = (settings as { feature_models?: Record<string, unknown> }).feature_models;
   const parsed = FeatureModelChoice.safeParse(fm?.[id]);
   return parsed.success ? parsed.data : undefined;
 }

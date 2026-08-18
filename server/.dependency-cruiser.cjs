@@ -97,7 +97,7 @@ module.exports = {
       comment:
         'R3 — `drizzle-orm` operators (eq, and, desc, ...) above the data layer mean query ' +
         'building has leaked into application code. Move the query into repository*. ' +
-        'Known drift: settings/feature-models.ts builds its queries inline.',
+        'Known drift: _shared/feature-models.ts builds its queries inline.',
       from: { path: APPLICATION, pathNot: COMPOSITION_ROOT },
       to: { path: ORM_PACKAGES, dependencyTypes: ['npm'] },
     },

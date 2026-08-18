@@ -42,6 +42,8 @@ export interface CreateSkillInput {
   /** Omitted for hand-written skills (defaults to "manual" server-side). */
   source?: Skill["source"];
   enabled?: boolean;
+  /** Provenance paths for an extracted/imported skill (e.g. conventions evidence). */
+  evidence_files?: string[];
 }
 
 export function useCreateSkill() {

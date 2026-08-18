@@ -36,6 +36,8 @@ const CreateSkillBody = z.object({
   body: z.string(),
   source: SkillSource.optional(),
   enabled: z.boolean().optional(),
+  /** Provenance paths for an extracted/imported skill (e.g. conventions evidence). */
+  evidence_files: z.array(z.string()).optional(),
 });
 
 const UpdateSkillBody = z.object({

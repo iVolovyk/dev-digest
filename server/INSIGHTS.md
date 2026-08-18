@@ -23,7 +23,19 @@ them here.
 
 ## Decisions
 
-_None yet._
+### 2026-08-18 — Relocate `feature-models.ts` out of `modules/settings/`
+
+**What:** moved `resolveFeatureModel` / `getFeatureModelOverride` /
+`defaultFeatureModel` from `src/modules/settings/feature-models.ts` to
+`src/modules/_shared/feature-models.ts`.
+**Why:** its own doc comment already declared it a dependency for several
+future feature modules ("onboarding, intent, risk brief, conformance,
+conventions"), but it had zero call sites and lived inside `modules/settings/`
+— the first real consumer (`modules/conventions`) importing it from there
+would be a `modules/a → modules/b` violation (onion-architecture R5).
+**Rejected:** importing it in place from `modules/settings/feature-models.ts`
+— `pnpm arch`'s `no-cross-module` rule doesn't currently flag that path only
+because nothing imports it yet, not because the location is correct.
 
 ## What Works
 
@@ -66,8 +78,30 @@ _None yet._
   container's `TiktokenTokenizer` satisfies it structurally, so
   `new XService(repo, app.container.tokenizer)` still compiles.
   `src/modules/skills/service.ts:27`
+  **General pattern, not just adapters:** the same fix applies to
+  `no-cross-module` — a new module (`modules/conventions/service.ts`) that
+  did `import type { RepoIntel } from '../repo-intel/types.js'` to type one
+  constructor param tripped `no-cross-module` (would've raised the baseline
+  from 41 to 42 warnings) even though the import was type-only and
+  `container.repoIntel` was the actual runtime value. Fix was identical:
+  declare a narrow local interface with only the method(s) actually used
+  (`interface RepoIntelSamples { getConventionSamples(repoId: string, n:
+  number): Promise<string[]> }`) instead of importing the sibling module's
+  type — `container.repoIntel` satisfies it structurally.
+  `src/modules/conventions/service.ts`
 
 ## Tool & Library Notes
+
+- **2026-08-18** — `MockGitClient.readFile()` (`src/adapters/mocks.ts:293`)
+  returns `''` for a path not in its `files` option; the real
+  `SimpleGitClient.readFile()` (`src/adapters/git/simple-git.ts`) throws
+  ENOENT for a missing file. Code that probes for an optional file (e.g.
+  sampling config files that may or may not exist) and only wraps the read
+  in `try/catch` behaves correctly against the real adapter but silently
+  includes an empty-content "file" against the mock. Treat
+  `content.trim().length === 0` the same as a caught exception so both
+  adapters degrade the same way. `src/modules/conventions/service.ts`
+  (`sampleFiles`)
 
 - **2026-08-12** — `fflate`'s `unzipSync(bytes, { filter })` is the only way to
   LIST a zip without inflating it: the callback is invoked once per entry with

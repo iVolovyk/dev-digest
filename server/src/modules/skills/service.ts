@@ -35,6 +35,8 @@ export interface CreateSkillInput {
   body: string;
   source?: SkillSource;
   enabled?: boolean;
+  /** Provenance paths for an extracted/imported skill (e.g. conventions evidence). */
+  evidence_files?: string[];
 }
 
 export interface UpdateSkillInput {
@@ -75,6 +77,7 @@ export class SkillsService {
       body: input.body,
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      ...(input.evidence_files !== undefined ? { evidenceFiles: input.evidence_files } : {}),
     });
   }
 
