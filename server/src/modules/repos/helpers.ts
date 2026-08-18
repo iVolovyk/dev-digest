@@ -47,7 +47,7 @@ export function toRepoDto(row: typeof t.repos.$inferSelect): Repo {
     workspace_id: row.workspaceId,
     owner: row.owner,
     name: row.name,
-    full_name: row.fullName,
+    fullName: row.fullName,
     default_branch: row.defaultBranch,
     clone_path: row.clonePath,
     last_polled_at: row.lastPolledAt?.toISOString() ?? null,

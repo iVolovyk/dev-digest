@@ -142,7 +142,7 @@ export const Repo = z.object({
   workspace_id: z.string(),
   owner: z.string(),
   name: z.string(),
-  full_name: z.string(),
+  fullName: z.string(),
   default_branch: z.string(),
   clone_path: z.string().nullable(),
   last_polled_at: z.string().nullable(),

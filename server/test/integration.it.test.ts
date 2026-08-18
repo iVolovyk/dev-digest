@@ -100,13 +100,13 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
       payload: { url: 'https://github.com/acme/widgets' },
     });
     expect(create.statusCode).toBe(201);
-    expect(create.json().full_name).toBe('acme/widgets');
+    expect(create.json().fullName).toBe('acme/widgets');
 
     await app.container.jobs.onIdle();
     expect(git.cloned.some((c) => c.repo.name === 'widgets')).toBe(true);
 
     const list = await app.inject({ method: 'GET', url: '/repos' });
-    expect(list.json().some((r: { full_name: string }) => r.full_name === 'acme/widgets')).toBe(
+    expect(list.json().some((r: { fullName: string }) => r.fullName === 'acme/widgets')).toBe(
       true,
     );
     await app.close();
