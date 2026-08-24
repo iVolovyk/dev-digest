@@ -8,8 +8,8 @@ import type {
   Provider,
   ReviewStrategy,
 } from '@devdigest/shared';
-import { AgentsRepository } from './repository.js';
-import { toAgentDto, toAgentVersionDto } from './helpers.js';
+import { AgentsRepository, type UpdateSkillLink } from './repository.js';
+import { toAgentDto, toAgentSkillLink, toAgentVersionDto } from './helpers.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -135,10 +135,10 @@ export class AgentsService {
     return row ? toAgentVersionDto(row) : undefined;
   }
 
-  /** Linked skills for an agent as AgentSkillLink[] (ordered). */
+  /** Linked skills for an agent as AgentSkillLink[] (ordered, disabled ones included). */
   async skillLinks(agentId: string): Promise<AgentSkillLink[]> {
     const links = await this.repo.linkedSkills(agentId);
-    return links.map((l) => ({ agent_id: agentId, skill_id: l.skill.id, order: l.order }));
+    return links.map((l) => toAgentSkillLink(agentId, l));
   }
 
   /**
@@ -156,6 +156,27 @@ export class AgentsService {
     return this.skillLinks(agentId);
   }
 
+  /**
+   * Replace the agent's skill list with an explicit ordered state — each entry
+   * carries its own on/off flag. The Skills tab lists every skill in the
+   * workspace, so dragging a row is a statement about the whole list, switched
+   * off ones included; that is what keeps a disabled skill's position stable
+   * instead of it drifting to the end the moment anything moves.
+   */
+  async setSkillsWithState(
+    workspaceId: string,
+    agentId: string,
+    skills: { skill_id: string; enabled: boolean }[],
+  ): Promise<AgentSkillLink[] | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    await this.repo.setSkillsWithState(
+      agentId,
+      skills.map((s) => ({ skillId: s.skill_id, enabled: s.enabled })),
+    );
+    return this.skillLinks(agentId);
+  }
+
   /** Link a single skill (append or set order) — additive to existing links. */
   async linkSkill(
     workspaceId: string,
@@ -168,6 +189,38 @@ export class AgentsService {
     const existing = await this.repo.linkedSkills(agentId);
     const resolvedOrder = order ?? existing.length;
     await this.repo.linkSkill(agentId, skillId, resolvedOrder);
+    return this.skillLinks(agentId);
+  }
+
+  /**
+   * Patch ONE link: toggle the per-agent switch and/or move it in the prompt.
+   * Toggling is deliberately not a delete: a disabled link keeps its order, so
+   * a with-skills / without-skills comparison is one flag flip, reversible and
+   * reproducible. Returns undefined when the agent isn't in this workspace
+   * (route → 404).
+   */
+  async updateSkillLink(
+    workspaceId: string,
+    agentId: string,
+    skillId: string,
+    patch: UpdateSkillLink,
+  ): Promise<AgentSkillLink[] | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    await this.repo.updateSkillLink(agentId, skillId, patch);
+    return this.skillLinks(agentId);
+  }
+
+  /** Detach one skill from an agent. Returns the remaining ordered links, or
+   *  undefined when the agent isn't in this workspace (route → 404). */
+  async unlinkSkill(
+    workspaceId: string,
+    agentId: string,
+    skillId: string,
+  ): Promise<AgentSkillLink[] | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    await this.repo.unlinkSkill(agentId, skillId);
     return this.skillLinks(agentId);
   }
 

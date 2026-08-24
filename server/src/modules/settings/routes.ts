@@ -72,27 +72,33 @@ export default async function settingsRoutes(appBase: FastifyInstance) {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (req): Promise<ConnTestResult> => {
-    const { provider, key } = req.body;
-    try {
-      // If the UI supplied a key, persist it (BYO key) before testing so the
-      // test reflects — and the rest of the app can use — the new value.
-      if (key) {
-        if (!container.secrets.set) {
-          return { provider, ok: false, message: 'Secrets backend is read-only' };
+      const { provider, key } = req.body;
+      try {
+        // If the UI supplied a key, persist it (BYO key) before testing so the
+        // test reflects — and the rest of the app can use — the new value.
+        if (key) {
+          if (!container.secrets.set) {
+            return { provider, ok: false, message: 'Secrets backend is read-only' };
+          }
+          await container.secrets.set(SECRET_KEY_BY_PROVIDER[provider], key);
+          container.invalidateSecretCaches();
         }
-        await container.secrets.set(SECRET_KEY_BY_PROVIDER[provider], key);
-        container.invalidateSecretCaches();
+        if (provider === GITHUB_PROVIDER) {
+          const gh = await container.github();
+          const login = await gh.currentLogin();
+          return { provider, ok: true, message: `Connected as @${login}` };
+        }
+        const llm = await container.llm(provider);
+        const models = await llm.listModels();
+        return { provider, ok: true, message: `OK — ${models.length} models available` };
+      } catch (err) {
+        // Log the full error server-side; cap what goes back to the client so
+        // an SDK that stringifies a whole response body into `message` can't
+        // dump internals through this always-200 diagnostic result.
+        req.log.error({ err, provider }, 'settings/test-connection failed');
+        const raw = err instanceof Error ? err.message : 'Connection test failed';
+        return { provider, ok: false, message: raw.slice(0, 300) };
       }
-      if (provider === GITHUB_PROVIDER) {
-        const gh = await container.github();
-        const login = await gh.currentLogin();
-        return { provider, ok: true, message: `Connected as @${login}` };
-      }
-      const llm = await container.llm(provider);
-      const models = await llm.listModels();
-      return { provider, ok: true, message: `OK — ${models.length} models available` };
-    } catch (err) {
-      return { provider, ok: false, message: (err as Error).message };
-    }
-  });
+    },
+  );
 }

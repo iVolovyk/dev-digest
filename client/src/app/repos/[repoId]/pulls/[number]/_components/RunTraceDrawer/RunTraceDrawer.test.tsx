@@ -47,6 +47,18 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("Tool calls")).toBeInTheDocument();
   });
 
+  it("shows an approximate token count on each prompt block", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    // Skills block body is "### skill" — 9 chars ⇒ ceil(9/4) = 3 tokens.
+    // The tilde must survive: this is an estimate, not the billed count.
+    expect(screen.getByText("~3 tokens")).toBeInTheDocument();
+    expect(screen.getByText("~3 tokens")).toHaveAttribute(
+      "title",
+      "Approximate token count for this block",
+    );
+  });
+
   it("switches to the live log tab", () => {
     renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
     fireEvent.click(screen.getByText("log"));

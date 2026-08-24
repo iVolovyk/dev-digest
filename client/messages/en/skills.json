@@ -84,10 +84,12 @@
       "manual": "Manual",
       "extracted": "Extracted",
       "community": "Community",
-      "imported_url": "Imported"
+      "imported_url": "Imported",
+      "imported_file": "Imported"
     }
   },
   "preview": {
+    "subtitle": "Rendered as the reviewing agent receives it.",
     "untrustedBadge": "untrusted source",
     "enabled": "Enabled",
     "disabled": "Disabled",
@@ -97,5 +99,91 @@
     "bodyLabel": "Skill body (Markdown)",
     "bodyHint": "Saving a changed body creates a new immutable version.",
     "version": "v{version}"
+  },
+  "tabs": {
+    "config": "Config",
+    "preview": "Preview",
+    "stats": "Stats",
+    "versions": "Versions"
+  },
+  "config": {
+    "title": "Configuration",
+    "name": "Name",
+    "nameHint": "Lowercase and hyphenated reads best in the prompt, e.g. pr-quality-rubric.",
+    "description": "Description",
+    "descriptionHint": "This line is the skill’s interface — say WHEN an agent should apply it, in directive voice (\"Flag…\", \"Require…\"). It is what a reader scans in the list, and what you will read first when a review goes wrong.",
+    "type": "Type",
+    "typeHint": "Grouping only — it does not change how the body is injected.",
+    "body": "Skill body",
+    "bodyHint": "Markdown. Saving a changed body mints a new immutable version.",
+    "bodyPlaceholder": "# Rule\nDescribe the rule…",
+    "enabled": "Enabled",
+    "enabledHint": "Off here means off for every agent — a global kill switch.",
+    "unsaved": "unsaved",
+    "tokens": "{n} tokens",
+    "save": "Save",
+    "saving": "Saving…",
+    "savedToast": "Saved (v{version}).",
+    "delete": "Delete skill",
+    "deleteConfirm": "Delete “{name}”? It will be unlinked from every agent.",
+    "deletedToast": "Deleted “{name}”."
+  },
+  "stats": {
+    "usedBy": "Used by",
+    "usedByUnit": "agents",
+    "enabledFor": "{n} with the skill enabled",
+    "injected": "Injected (30d)",
+    "injectedUnit": "runs",
+    "injectedHint": "Runs whose assembled prompt actually contained this skill.",
+    "avgTokens": "Avg tokens",
+    "avgTokensHint": "Mean tokens this skill added per run. Current body: {body} tokens.",
+    "acceptRate": "Accept rate",
+    "findings": "Findings (30d)",
+    "agentsUsing": "Agents using this skill",
+    "agentDisabled": "disabled here",
+    "open": "Open",
+    "byCategory": "Findings by category",
+    "attribution": "Findings are produced by an agent, not by one skill — these numbers cover runs in which this skill was injected. Read them as correlation, not as proof the skill caused the finding.",
+    "neverInjected": "Never injected yet — link it to an agent and run a review.",
+    "noFindings": "No findings in the last 30 days.",
+    "loadError": "Could not load stats for this skill."
+  },
+  "versions": {
+    "title": "Version history",
+    "count": "{n} versions",
+    "subtitle": "Every body change snapshots the text, so a past run stays reproducible against the exact wording it used.",
+    "current": "Current",
+    "restore": "Restore",
+    "restoreConfirm": "Restore v{version}? This mints a new version with that body.",
+    "restoredToast": "Restored v{version} as v{newVersion}.",
+    "diff": "Diff",
+    "diffTitle": "v{version} → current",
+    "loadError": "Could not load version history.",
+    "empty": "No version history yet."
+  },
+  "create": {
+    "title": "Create a skill",
+    "tabCreate": "Create",
+    "tabImport": "Import",
+    "submit": "Create skill",
+    "creating": "Creating…",
+    "createdToast": "Created “{name}”."
+  },
+  "import": {
+    "choose": "Choose a file",
+    "chooseHint": "Markdown (.md, .markdown, .txt) or a .zip archive, up to 2 MB.",
+    "parsing": "Reading…",
+    "previewTitle": "Preview — nothing is saved yet",
+    "previewHint": "Check what you are about to put into your agents’ prompts. Saving is the next step, and until you press it nothing reaches the database.",
+    "skippedTitle": "Not processed ({n})",
+    "skippedHint": "These archive entries were listed but never read or executed — a skill is text, nothing in it runs.",
+    "warningsTitle": "Warnings",
+    "trustNotice": "An imported skill is somebody else’s instructions landing in your agent’s prompt. Its body is stored and injected as delimiter-wrapped data, and it is saved disabled — read it before you enable it.",
+    "save": "Save skill",
+    "saving": "Saving…",
+    "savedToast": "Imported “{name}” — saved disabled until you vet it.",
+    "failed": "Could not read that file.",
+    "tooLarge": "That file is larger than 2 MB.",
+    "badType": "Unsupported file type — use .md, .markdown, .txt or .zip."
   }
 }

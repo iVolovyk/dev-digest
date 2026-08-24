@@ -22,7 +22,10 @@ export function RunStatus({
 
   React.useEffect(() => {
     if (running) wasRunning.current = true;
-    if (!running && wasRunning.current) onDone?.();
+    if (!running && wasRunning.current) {
+      wasRunning.current = false;
+      onDone?.();
+    }
   }, [running, onDone]);
 
   if (runIds.length === 0) return null;

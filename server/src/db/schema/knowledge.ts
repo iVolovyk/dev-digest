@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, jsonb, timestamp, doublePrecision, boolean, vector, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, jsonb, timestamp, doublePrecision, boolean, vector, index, integer } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces } from './core';
 import { repos } from './repos';
@@ -35,8 +35,13 @@ export const conventions = pgTable('conventions', {
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   repoId: uuid('repo_id').references(() => repos.id, { onDelete: 'cascade' }),
   rule: text('rule').notNull(),
+  /** Free-text grouping the extractor assigns (e.g. "error-handling", "naming"). */
+  category: text('category').notNull(),
   evidencePath: text('evidence_path'),
   evidenceSnippet: text('evidence_snippet'),
+  /** 1-based, inclusive — the real line range the snippet was sliced from. */
+  evidenceStartLine: integer('evidence_start_line'),
+  evidenceEndLine: integer('evidence_end_line'),
   confidence: doublePrecision('confidence'),
   accepted: boolean('accepted').notNull().default(false),
 });

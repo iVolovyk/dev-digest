@@ -52,6 +52,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ? false
         : {
             level: config.logLevel,
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                '*.key',
+                '*.token',
+                '*.secret',
+                '*.password',
+              ],
+              censor: '[REDACTED]',
+            },
             transport:
               config.nodeEnv === 'development'
                 ? { target: 'pino-pretty', options: { colorize: true } }

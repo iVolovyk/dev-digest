@@ -57,7 +57,12 @@ export const agentSkills = pgTable(
     skillId: uuid('skill_id')
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
+    // Position of this skill's block in the assembled prompt (0 = first).
     order: integer('order').notNull().default(0),
+    // Per-agent switch. A disabled link keeps the association AND its order,
+    // but the block is left out of this agent's prompt — the with-skills /
+    // without-skills comparison must not require deleting and re-adding links.
+    enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
 );

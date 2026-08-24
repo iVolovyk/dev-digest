@@ -17,52 +17,56 @@ export default async function pollingRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
 
-  app.post('/repos/:id/poll', { schema: { params: IdParams } }, async (req) => {
-    const { workspaceId } = await getContext(container, req);
-    const [repo] = await container.db
-      .select()
-      .from(t.repos)
-      .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, req.params.id)));
-    if (!repo) throw new NotFoundError('Repo not found');
+  app.post(
+    '/repos/:id/poll',
+    { schema: { params: IdParams }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      const [repo] = await container.db
+        .select()
+        .from(t.repos)
+        .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, req.params.id)));
+      if (!repo) throw new NotFoundError('Repo not found');
 
-    const gh = await container.github();
-    const pulls = await gh.listPullRequests({ owner: repo.owner, name: repo.name });
-    let synced = 0;
-    for (const pr of pulls) {
-      await container.db
-        .insert(t.pullRequests)
-        .values({
-          workspaceId,
-          repoId: repo.id,
-          number: pr.number,
-          title: pr.title,
-          author: pr.author,
-          branch: pr.branch,
-          base: pr.base,
-          headSha: pr.head_sha,
-          additions: pr.additions,
-          deletions: pr.deletions,
-          filesCount: pr.files_count,
-          status: pr.status,
-          updatedAt: pr.updated_at ? new Date(pr.updated_at) : null,
-        })
-        .onConflictDoUpdate({
-          target: [t.pullRequests.repoId, t.pullRequests.number],
-          set: {
+      const gh = await container.github();
+      const pulls = await gh.listPullRequests({ owner: repo.owner, name: repo.name });
+      let synced = 0;
+      for (const pr of pulls) {
+        await container.db
+          .insert(t.pullRequests)
+          .values({
+            workspaceId,
+            repoId: repo.id,
+            number: pr.number,
             title: pr.title,
+            author: pr.author,
+            branch: pr.branch,
+            base: pr.base,
             headSha: pr.head_sha,
+            additions: pr.additions,
+            deletions: pr.deletions,
+            filesCount: pr.files_count,
             status: pr.status,
             updatedAt: pr.updated_at ? new Date(pr.updated_at) : null,
-          },
-        });
-      synced++;
-    }
-    await container.db
-      .update(t.repos)
-      .set({ lastPolledAt: new Date() })
-      .where(eq(t.repos.id, repo.id));
+          })
+          .onConflictDoUpdate({
+            target: [t.pullRequests.repoId, t.pullRequests.number],
+            set: {
+              title: pr.title,
+              headSha: pr.head_sha,
+              status: pr.status,
+              updatedAt: pr.updated_at ? new Date(pr.updated_at) : null,
+            },
+          });
+        synced++;
+      }
+      await container.db
+        .update(t.repos)
+        .set({ lastPolledAt: new Date() })
+        .where(eq(t.repos.id, repo.id));
 
-    // NOTE: no review is triggered here — manual trigger only.
-    return { synced, reviewTriggered: false };
-  });
+      // NOTE: no review is triggered here — manual trigger only.
+      return { synced, reviewTriggered: false };
+    },
+  );
 }

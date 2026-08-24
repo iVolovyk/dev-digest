@@ -23,7 +23,19 @@ them here.
 
 ## Decisions
 
-_None yet._
+### 2026-08-18 — Relocate `feature-models.ts` out of `modules/settings/`
+
+**What:** moved `resolveFeatureModel` / `getFeatureModelOverride` /
+`defaultFeatureModel` from `src/modules/settings/feature-models.ts` to
+`src/modules/_shared/feature-models.ts`.
+**Why:** its own doc comment already declared it a dependency for several
+future feature modules ("onboarding, intent, risk brief, conformance,
+conventions"), but it had zero call sites and lived inside `modules/settings/`
+— the first real consumer (`modules/conventions`) importing it from there
+would be a `modules/a → modules/b` violation (onion-architecture R5).
+**Rejected:** importing it in place from `modules/settings/feature-models.ts`
+— `pnpm arch`'s `no-cross-module` rule doesn't currently flag that path only
+because nothing imports it yet, not because the location is correct.
 
 ## What Works
 
@@ -31,17 +43,113 @@ _None yet._
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-12** — a "replace the whole ordered set" endpoint cannot be a plain
+  delete-then-reinsert once the link row carries state of its own.
+  `POST /agents/:id/skills` (`AgentsRepository.setSkills`) is what the Skills
+  tab sends for BOTH attach and reorder, so the first version silently reset
+  `agent_skills.enabled` to the column default: disable a skill, move any row,
+  and it is back on — quietly changing what reaches the model with no toggle
+  touched. Found by exercising the live API in sequence
+  (`PUT .../skills/:id {enabled:false}` → `POST .../skills {skill_ids:[…]}`),
+  not by any test. `setSkills` now reads the previous links, carries `enabled`
+  forward for ids that were already linked, and does the delete+insert in one
+  transaction (an agent with zero skills mid-write would review without them).
+  Regression: `server/test/agents-skills.it.test.ts`.
+  `src/modules/agents/repository.ts`
 
 ## Codebase Patterns
 
-_None yet._
+- **2026-08-12** — `waitForPrRuns` only waits for `agent_runs.status` to go
+  terminal, and `completeAgentRun` is NOT a run's last write: the executor still
+  writes `run_skills` and then `run_traces` after it
+  (`src/modules/reviews/run-executor.ts`). A test asserting on a trace or on
+  per-run stats rows straight after `waitForPrRuns` races those writes. Poll
+  `run_traces` for the runId instead — it is written last, so its presence proves
+  every earlier post-completion write landed.
+  `server/test/skills-injection.it.test.ts` (`waitForTrace`)
+
+- **2026-08-12** — `Tokenizer` has no port in `src/vendor/shared/adapters.ts`;
+  it is declared in the concrete adapter (`src/adapters/tokenizer/index.ts`),
+  so a service that does `import type { Tokenizer }` from there adds a fresh
+  `service-no-concrete-adapter` warning to `pnpm arch` even though the import
+  is type-only (`tsPreCompilationDeps: true`). Until it becomes a real port,
+  re-declare the one-method shape locally
+  (`export interface Tokenizer { count(text: string): number }`) — the
+  container's `TiktokenTokenizer` satisfies it structurally, so
+  `new XService(repo, app.container.tokenizer)` still compiles.
+  `src/modules/skills/service.ts:27`
+  **General pattern, not just adapters:** the same fix applies to
+  `no-cross-module` — a new module (`modules/conventions/service.ts`) that
+  did `import type { RepoIntel } from '../repo-intel/types.js'` to type one
+  constructor param tripped `no-cross-module` (would've raised the baseline
+  from 41 to 42 warnings) even though the import was type-only and
+  `container.repoIntel` was the actual runtime value. Fix was identical:
+  declare a narrow local interface with only the method(s) actually used
+  (`interface RepoIntelSamples { getConventionSamples(repoId: string, n:
+  number): Promise<string[]> }`) instead of importing the sibling module's
+  type — `container.repoIntel` satisfies it structurally.
+  `src/modules/conventions/service.ts`
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-18** — `MockGitClient.readFile()` (`src/adapters/mocks.ts:293`)
+  returns `''` for a path not in its `files` option; the real
+  `SimpleGitClient.readFile()` (`src/adapters/git/simple-git.ts`) throws
+  ENOENT for a missing file. Code that probes for an optional file (e.g.
+  sampling config files that may or may not exist) and only wraps the read
+  in `try/catch` behaves correctly against the real adapter but silently
+  includes an empty-content "file" against the mock. Treat
+  `content.trim().length === 0` the same as a caught exception so both
+  adapters degrade the same way. `src/modules/conventions/service.ts`
+  (`sampleFiles`)
+
+- **2026-08-12** — `fflate`'s `unzipSync(bytes, { filter })` is the only way to
+  LIST a zip without inflating it: the callback is invoked once per entry with
+  `{ name, size, originalSize }` and returning `false` skips decompression, so
+  `unzipSync(bytes, { filter: (f) => { entries.push(f); return false; } })`
+  returns `{}` while collecting the full manifest. That is what makes an
+  entry-count / inflated-size cap enforceable on an untrusted upload BEFORE
+  the bytes are expanded; a second `unzipSync` with
+  `filter: (f) => f.name === chosen` then inflates the one entry we read.
+  Directory entries come through with a trailing `/`.
+  `src/modules/skills/import.ts:185`
+
+- **2026-08-09** — two ways a `dependency-cruiser` rule silently passes over a
+  codebase that violates it. (1) `to.path` matches the **resolved** path, and
+  pnpm resolves to
+  `node_modules/.pnpm/drizzle-orm@0.38.4_postgres@3.4.9/node_modules/drizzle-orm/index.js`
+  — a bare-specifier pattern like `^drizzle-orm$` matches nothing and reports
+  green; use an unanchored `node_modules/(drizzle-orm|postgres)/`. Node builtins
+  are the exception, they stay bare (`fs`, `node:fs`), so anchor those.
+  (2) without `options.tsPreCompilationDeps: true`, `import type` lines vanish
+  before the cruise — and most layer leakage here is type-only (`AgentRow`,
+  `Container`, `RepoIntel`). Always prove a new rule with a throwaway probe file
+  (`printf "import { eq } from 'drizzle-orm';\nexport const p = eq;\n" >
+  src/modules/repos/__arch-probe.ts && pnpm arch`); an orphan file under `src/`
+  is cruised even though nothing imports it. `server/.dependency-cruiser.cjs`
+
+- **2026-08-08** — HTML comments in an agent-instruction file are stripped
+  before the content reaches the model: a `<!-- canary BLIP-9090 -->` appended
+  to `server/AGENTS.md` was invisible, while `The token is QUUX-3312.` as
+  visible prose on the next line came back verbatim. Matters when verifying
+  that `AGENTS.md`/`CLAUDE.md` is actually loaded — a commented-out canary
+  yields a false `NO` and looks exactly like a broken symlink. Use visible
+  text: `printf '\n## Canary\nToken is X-1234.\n' >> server/AGENTS.md &&
+  (cd server && claude -p --permission-mode plan 'Do not use tools. What is
+  the canary token in your instructions?')`. Applies to every module's file,
+  not just `server/`.
 
 ## Recurring Errors & Fixes
+
+- **2026-08-12** — with 9 `*.it.test.ts` files each starting its OWN Postgres,
+  `pnpm test` intermittently fails ONE suite outright with
+  `Error: Failed to connect to Reaper` (all of that file's tests reported as
+  skipped). It moves between files run to run — twice in a row it was a
+  different suite — because it is contention over testcontainers' shared
+  Ryuk/reaper container, not anything in the code. Re-running the file alone
+  passes. To judge a change, run `pnpm exec vitest run --no-file-parallelism`:
+  27 files / 176 tests green serially, ~2 min. If it persists, clear stale
+  containers first: `docker rm -f $(docker ps -aq --filter label=org.testcontainers=true)`.
 
 - **2026-08-06** — `pnpm test` in `server/` reliably fails every
   `*.it.test.ts` suite with `Error: Hook timed out in 120000ms` in this
@@ -70,4 +178,8 @@ _None yet._
 
 ## Open Questions
 
-_None yet._
+- **2026-08-08** — the `CLAUDE.md` → `AGENTS.md` rename was repo-wide (root +
+  all four packages) with no home module, so its one durable finding landed
+  here by default rather than by fit. If workflow-level findings keep landing
+  in `server/` for lack of anywhere better, that's the signal
+  `engineering-insights` describes for adding a root `INSIGHTS.md`.

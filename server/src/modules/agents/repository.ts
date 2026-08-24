@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -46,6 +46,15 @@ export interface UpdateAgent {
 export interface LinkedSkillRow {
   skill: typeof t.skills.$inferSelect;
   order: number;
+  /** Per-agent switch (`agent_skills.enabled`) — a disabled link keeps its
+   *  association and order but is left out of this agent's prompt. */
+  enabled: boolean;
+}
+
+/** Patch for one `agent_skills` row — the per-agent switch and/or its position. */
+export interface UpdateSkillLink {
+  enabled?: boolean;
+  order?: number;
 }
 
 export class AgentsRepository {
@@ -68,6 +77,15 @@ export class AgentsRepository {
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)));
     return row;
+  }
+
+  /** Batch lookup — avoids one query per id when resolving a set of agents at once. */
+  async getByIds(workspaceId: string, ids: string[]): Promise<AgentRow[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), inArray(t.agents.id, ids)));
   }
 
   /** Delete an agent (scoped to workspace). Versions/skill-links cascade;
@@ -188,15 +206,17 @@ export class AgentsRepository {
 
   // ---- agent_skills link table (A2 owns the agent side) -------------------
 
-  /** Skills linked to an agent, in `order` ascending. */
+  /** Skills linked to an agent, in `order` ascending. Disabled links are
+   *  INCLUDED — the caller decides (the prompt builder filters, the editor
+   *  renders them as an off switch). */
   async linkedSkills(agentId: string): Promise<LinkedSkillRow[]> {
     const rows = await this.db
-      .select({ skill: t.skills, order: t.agentSkills.order })
+      .select({ skill: t.skills, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agentId))
       .orderBy(asc(t.agentSkills.order));
-    return rows.map((r) => ({ skill: r.skill, order: r.order }));
+    return rows.map((r) => ({ skill: r.skill, order: r.order, enabled: r.enabled }));
   }
 
   async skillIdsForAgent(agentId: string): Promise<string[]> {
@@ -215,6 +235,26 @@ export class AgentsRepository {
       });
   }
 
+  /**
+   * Patch one link: flip the per-agent switch and/or move it in the prompt.
+   * No-op when the patch is empty or the link doesn't exist (the caller re-reads
+   * the list either way, so an unknown skill id simply changes nothing).
+   */
+  async updateSkillLink(
+    agentId: string,
+    skillId: string,
+    patch: UpdateSkillLink,
+  ): Promise<void> {
+    if (patch.enabled === undefined && patch.order === undefined) return;
+    await this.db
+      .update(t.agentSkills)
+      .set({
+        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+        ...(patch.order !== undefined ? { order: patch.order } : {}),
+      })
+      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.agentSkills.skillId, skillId)));
+  }
+
   async unlinkSkill(agentId: string, skillId: string): Promise<void> {
     await this.db
       .delete(t.agentSkills)
@@ -225,12 +265,58 @@ export class AgentsRepository {
    * Replace the full set of linked skills for an agent with `skillIds`, assigning
    * order = index. Used by the "Skills" editor tab (attach/reorder). Skills not in
    * the list are unlinked.
+   *
+   * A skill that was ALREADY linked keeps its `enabled` flag; only genuinely new
+   * links start enabled. The Skills tab reorders and attaches through this one
+   * endpoint, so a naive delete-and-reinsert would silently switch a skill the
+   * user had turned off back on the next time they moved a row — quietly
+   * changing what goes into the prompt.
+   *
+   * Wrapped in a transaction: between the delete and the insert an agent has no
+   * skills at all, and a review starting in that window would run without them.
    */
+  /**
+   * Replace the link set with an explicit ordered state (order = index, and
+   * each entry's own `enabled`). Unlike `setSkills` this does not infer the
+   * flag from history — the caller is stating the whole list, so a skill left
+   * out is unlinked and a skill switched off is stored switched off.
+   */
+  async setSkillsWithState(
+    agentId: string,
+    entries: { skillId: string; enabled: boolean }[],
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (entries.length === 0) return;
+      await tx.insert(t.agentSkills).values(
+        entries.map((e, i) => ({
+          agentId,
+          skillId: e.skillId,
+          order: i,
+          enabled: e.enabled,
+        })),
+      );
+    });
+  }
+
   async setSkills(agentId: string, skillIds: string[]): Promise<void> {
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+    await this.db.transaction(async (tx) => {
+      const previous = await tx
+        .select({ skillId: t.agentSkills.skillId, enabled: t.agentSkills.enabled })
+        .from(t.agentSkills)
+        .where(eq(t.agentSkills.agentId, agentId));
+      const wasEnabled = new Map(previous.map((p) => [p.skillId, p.enabled]));
+
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (skillIds.length === 0) return;
+      await tx.insert(t.agentSkills).values(
+        skillIds.map((skillId, i) => ({
+          agentId,
+          skillId,
+          order: i,
+          enabled: wasEnabled.get(skillId) ?? true,
+        })),
+      );
+    });
   }
 }

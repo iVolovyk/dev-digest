@@ -91,7 +91,16 @@
     "title": "Skills",
     "enabledCount": "{linked} of {total} enabled",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Drag to reorder. Unchecking keeps a skill's place, so checking it again reproduces the same prompt.",
+    "tokensAdded": "~{n} tokens added to every run",
+    "globallyDisabled": "disabled globally",
+    "globallyDisabledTitle": "This skill is switched off in the Skills Lab, so it is not injected for any agent.",
+    "empty": "No skills yet",
+    "emptyBody": "Create a skill in the Skills Lab, then check it here to add it to this agent.",
+    "loadError": "Could not load this agent’s skills.",
+    "openSkill": "Open in Skills Lab",
+    "dragHint": "Reorder {name} — drag, or focus and press ↑/↓",
+    "noMatch": "No skills match “{q}”."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

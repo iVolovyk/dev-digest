@@ -1,0 +1,10 @@
+{
+  "name": "Skills Lab lists the seeded skills",
+  "description": "Loads /skills and confirms a seeded skill (test-coverage-nudge) is rendered. Read-only: exercises the skills route and its API fetch, never a model call.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/skills"], "label": "load the Skills Lab" },
+    { "cmd": ["wait", "--url", "/skills"], "label": "skills route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skills fetch settles" },
+    { "cmd": ["wait", "--text", "test-coverage-nudge"], "label": "seeded skill is visible" }
+  ]
+}
