@@ -46,6 +46,19 @@ const REVIEW_FIXTURE: Review = {
   ],
 };
 
+/**
+ * The review pipeline derives PR intent once per batch before the agent loop
+ * (`run-executor.ts`), which defaults to the `openrouter` provider — mock it
+ * here so this suite never makes a real network call regardless of which real
+ * secrets happen to be configured on the machine running it.
+ */
+const INTENT_FIXTURE = {
+  intent: 'Add rate limiting to protect the public API from abuse.',
+  in_scope: ['Rate limiting middleware'],
+  out_of_scope: [],
+  risk_areas: [],
+};
+
 const SKILL_NAME = 'injection-probe-skill';
 const SKILL_BODY = 'Always check that secrets are read from the environment.';
 
@@ -152,7 +165,10 @@ d('skills injection (Testcontainers pg)', () => {
       overrides: {
         git: new MockGitClient({ diff: DIFF }),
         github: new MockGitHubClient(),
-        llm: { openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }) },
+        llm: {
+          openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }),
+          openrouter: new MockLLMProvider('openai', { structured: INTENT_FIXTURE }),
+        },
       },
     });
   }

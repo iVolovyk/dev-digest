@@ -4,7 +4,7 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -58,6 +58,20 @@ const REVIEW_FIXTURE: Review = {
       kind: 'finding',
     },
   ],
+};
+
+/**
+ * The review pipeline now derives PR intent once per batch before the agent
+ * loop (`run-executor.ts`), which defaults to the `openrouter` provider —
+ * mock it here (alongside `github` below) so this suite never makes a real
+ * network call regardless of which real secrets happen to be configured on
+ * the machine running it.
+ */
+const INTENT_FIXTURE = {
+  intent: 'Add rate limiting to protect the public API from abuse.',
+  in_scope: ['Rate limiting middleware'],
+  out_of_scope: [],
+  risk_areas: [],
 };
 
 let repoSeq = 0;
@@ -117,8 +131,10 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
+        github: new MockGitHubClient(),
         llm: {
           [provider]: new MockLLMProvider(provider, { structured }),
+          openrouter: new MockLLMProvider('openai', { structured: INTENT_FIXTURE }),
         },
       },
     });

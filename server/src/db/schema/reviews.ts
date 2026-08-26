@@ -60,6 +60,28 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+
+  // ---- NEW ----
+  /** Short free-text tags, e.g. "Auth surface touched". NOT the heavy `Risk` type. */
+  riskAreas: jsonb('risk_areas').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Derived in code from signal presence — never the model's self-report. */
+  confidence: text('confidence', { enum: ['high', 'medium', 'low'] })
+    .notNull()
+    .default('low'),
+  /** Which signals actually contributed — the evidence behind `confidence`. */
+  sources: jsonb('sources').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** SHA-256 of every classifier input + prompt version + model. '' ⇒ always stale. */
+  inputHash: text('input_hash').notNull().default(''),
+  /** Head commit intent was computed against — display/debug + the client's cheap staleness hint. */
+  headSha: text('head_sha'),
+  /** Which model produced it (shown in the UI; part of the hash). */
+  model: text('model'),
+  /**
+   * Not `now()` (`_shared.ts`) — that helper hardcodes the column name
+   * `created_at`, which would misname this column. Same semantics
+   * (timestamptz, defaultNow, notNull), correct column name.
+   */
+  computedAt: timestamp('computed_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const prBrief = pgTable('pr_brief', {

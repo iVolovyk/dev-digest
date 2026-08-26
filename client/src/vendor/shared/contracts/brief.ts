@@ -6,10 +6,28 @@ import { z } from 'zod';
  */
 
 // ---- Intent ----
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+export const IntentSource = z.enum([
+  'description',
+  'linked_issue',
+  'linked_spec',
+  'branch',
+  'commits',
+  'diff_paths',
+]);
+export type IntentSource = z.infer<typeof IntentSource>;
+
 export const Intent = z.object({
   intent: z.string(),
   in_scope: z.array(z.string()),
   out_of_scope: z.array(z.string()),
+  /** Short tags ("Auth surface touched"). Deliberately NOT the `Risk` object. */
+  risk_areas: z.array(z.string()).default([]),
+  /** Derived deterministically from `sources`; never model-reported. */
+  confidence: IntentConfidence.default('low'),
+  sources: z.array(IntentSource).default([]),
 });
 export type Intent = z.infer<typeof Intent>;
 

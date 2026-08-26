@@ -27,6 +27,10 @@ import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
+import { IntentContextRepository } from '../modules/intent/repository.js';
+import { IntentService } from '../modules/intent/service.js';
+import { INTENT_FEATURE_ID } from '../modules/intent/constants.js';
+import { resolveFeatureModel } from '../modules/_shared/feature-models.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 
@@ -76,6 +80,8 @@ export class Container {
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
   private _priceBook?: PriceBook;
+  private _intentContextRepo?: IntentContextRepository;
+  private _intentService?: IntentService;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -98,6 +104,29 @@ export class Container {
 
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
+  }
+
+  /** Intent module's own supporting queries (pull/repo context, commit
+   *  messages, changed file paths) — `pr_intent` itself is owned by
+   *  `reviewRepo` (Risk #9). */
+  get intentContextRepo(): IntentContextRepository {
+    return (this._intentContextRepo ??= new IntentContextRepository(this.db));
+  }
+
+  /** PR intent classifier, wired here (not in `modules/intent/routes.ts`
+   *  alone) so `run-executor.ts` (a sibling module) can reach it via
+   *  `container.intentService` — cross-module sharing through the
+   *  composition root (R5), mirroring `agentsRepo`/`reviewRepo`.
+   *  `reviewRepo` doubles as the `IntentStore` port it needs (Risk #9). */
+  get intentService(): IntentService {
+    return (this._intentService ??= new IntentService(
+      this.reviewRepo,
+      this.intentContextRepo,
+      this.git,
+      () => this.github(),
+      (provider) => this.llm(provider),
+      (workspaceId) => resolveFeatureModel(this, workspaceId, INTENT_FEATURE_ID),
+    ));
   }
 
   get codeIndex(): CodeIndex {

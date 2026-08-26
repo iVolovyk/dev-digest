@@ -35,6 +35,8 @@ export function wrapUntrusted(label: string, content: string): string {
 
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
+/** Cap the derived intent — a summary should never outweigh its source. */
+const MAX_INTENT_CHARS = 2000;
 
 export interface PromptParts {
   /** Agent's system prompt (trusted). */
@@ -66,6 +68,13 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Derived PR intent/scope (untrusted — it is a summary OF untrusted author
+   * content). Delimiter-wrapped + truncated. Rendered after the PR description
+   * so the model reads the claim, then our reading of it. Empty/undefined →
+   * section omitted (no behaviour change for existing callers).
+   */
+  intent?: string;
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
@@ -100,11 +109,18 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     parts.prDescription && parts.prDescription.trim().length > 0
       ? parts.prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS)
       : undefined;
+  const intent =
+    parts.intent && parts.intent.trim().length > 0
+      ? parts.intent.slice(0, MAX_INTENT_CHARS)
+      : undefined;
 
   const userSections: string[] = [];
   if (parts.task) userSections.push(parts.task);
   if (prDescription) {
     userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
+  }
+  if (intent) {
+    userSections.push(`## PR intent (derived)\n${wrapUntrusted('pr-intent', intent)}`);
   }
   if (skillsBlock) userSections.push(`## Skills / rules\n${skillsBlock}`);
   if (memoryBlock) userSections.push(`## Relevant memory\n${memoryBlock}`);
@@ -134,6 +150,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intent ?? null,
     user,
   };
 
