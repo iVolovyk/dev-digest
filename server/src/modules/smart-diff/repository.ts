@@ -3,7 +3,7 @@ import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 
 /**
- * `SmartDiffRepository` — the two indexed reads Smart Diff is derived from.
+ * `SmartDiffRepository` — the handful of small reads Smart Diff is derived from.
  *
  * Reads `pull_requests` / `pr_files` / `reviews` / `findings` directly through
  * `db/**` rather than depending on `modules/pulls` or `modules/reviews` —
@@ -33,7 +33,8 @@ export class SmartDiffRepository {
     const [row] = await this.db
       .select({ id: t.pullRequests.id })
       .from(t.pullRequests)
-      .where(and(eq(t.pullRequests.workspaceId, workspaceId), eq(t.pullRequests.id, prId)));
+      .where(and(eq(t.pullRequests.workspaceId, workspaceId), eq(t.pullRequests.id, prId)))
+      .limit(1);
     return row;
   }
 
@@ -51,7 +52,8 @@ export class SmartDiffRepository {
 
   /**
    * Distinct `findings.start_line` values per file path for the PR's latest
-   * review of kind `'review'` (by `created_at desc`) — the same "latest review"
+   * review of kind `'review'` (by `created_at desc`, `id desc` as a stable
+   * tiebreak when two rows share a timestamp) — the same "latest review"
    * semantics the PR list uses for its score ring and severity badges. Empty
    * map when the PR has never been reviewed (the normal case).
    */
@@ -60,7 +62,7 @@ export class SmartDiffRepository {
       .select({ id: t.reviews.id })
       .from(t.reviews)
       .where(and(eq(t.reviews.prId, prId), eq(t.reviews.kind, 'review')))
-      .orderBy(desc(t.reviews.createdAt))
+      .orderBy(desc(t.reviews.createdAt), desc(t.reviews.id))
       .limit(1);
 
     const out = new Map<string, number[]>();

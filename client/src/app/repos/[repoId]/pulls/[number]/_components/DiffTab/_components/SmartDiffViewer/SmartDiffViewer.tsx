@@ -35,9 +35,13 @@ interface SmartDiffViewerProps {
 const SEVERITY_ORDER: Severity[] = ["CRITICAL", "WARNING", "SUGGESTION"];
 
 /** `${file}:${start_line}` → the distinct severities at that line, from the
- *  latest review of kind 'review' (matches the server's finding_lines source). */
+ *  latest review of kind 'review'. "Latest" is `created_at desc, id desc` —
+ *  the same tiebreak the server uses to pick finding_lines, so the badges and
+ *  the ordering never disagree regardless of what order the API returns rows. */
 function severityByLine(reviews: ReviewRecord[]): Map<string, Set<Severity>> {
-  const latest = reviews.find((r) => r.kind === "review");
+  const latest = reviews
+    .filter((r) => r.kind === "review")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))[0];
   const map = new Map<string, Set<Severity>>();
   if (!latest) return map;
   for (const f of latest.findings) {
@@ -95,12 +99,17 @@ export function SmartDiffViewer({
                 const prFile: PrFile =
                   filesByPath.get(file.path) ??
                   { path: file.path, additions: file.additions, deletions: file.deletions, patch: null };
+                const open = roleDefaultOpen(group.role, file);
                 return (
                   <FileCard
-                    key={file.path}
+                    // `open` in the key: when a finished review adds findings to
+                    // this path, roleDefaultOpen flips true and the card must
+                    // re-mount to pick up the new default (FileCard seeds `open`
+                    // once). Without this the auto-expand only works on reload.
+                    key={`${file.path}:${open}`}
                     file={prFile}
                     commenting={commenting}
-                    defaultOpen={roleDefaultOpen(group.role, file)}
+                    defaultOpen={open}
                     findingLines={file.finding_lines}
                     lineAnnotations={annotationsForFile(file.path, file.finding_lines, sevMap)}
                   />

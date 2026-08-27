@@ -141,7 +141,20 @@ export const SMART_DIFF_RULES: readonly SmartDiffRule[] = [
 export const SMART_DIFF_DEFAULT_ROLE: SmartDiffRole = 'core';
 
 /** Group emission order — the server emits `groups` already in this order. */
-export const SMART_DIFF_ROLE_ORDER: readonly SmartDiffRole[] = ['core', 'wiring', 'boilerplate'];
+export const SMART_DIFF_ROLE_ORDER = ['core', 'wiring', 'boilerplate'] as const satisfies readonly SmartDiffRole[];
+
+/**
+ * Compile-time guard: `SMART_DIFF_ROLE_ORDER` must enumerate every `SmartDiffRole`.
+ * `groupAndSort` only visits the roles listed here, so a role added to the shared
+ * enum without being ordered here would be silently dropped from `groups`. Adding
+ * one now fails the build instead.
+ */
+type _RoleOrderIsExhaustive =
+  Exclude<SmartDiffRole, (typeof SMART_DIFF_ROLE_ORDER)[number]> extends never
+    ? true
+    : ['SMART_DIFF_ROLE_ORDER is missing a SmartDiffRole'];
+const _roleOrderIsExhaustive: _RoleOrderIsExhaustive = true;
+void _roleOrderIsExhaustive;
 
 /** Roles whose line counts feed `split_suggestion.total_lines` (boilerplate excluded). */
 export const SPLIT_COUNTED_ROLES: readonly SmartDiffRole[] = ['core', 'wiring'];

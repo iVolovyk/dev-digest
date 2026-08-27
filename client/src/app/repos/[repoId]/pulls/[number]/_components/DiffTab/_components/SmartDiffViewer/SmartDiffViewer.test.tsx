@@ -1,14 +1,18 @@
-import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { describe, it, expect, afterEach, afterAll, beforeAll, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { PrFile, ReviewRecord, SmartDiffGroup } from "@devdigest/shared";
 import prReview from "../../../../../../../../../../messages/en/prReview.json";
 import shell from "../../../../../../../../../../messages/en/shell.json";
 import { SmartDiffViewer } from "./SmartDiffViewer";
 
+const realScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   // jsdom has no layout — stub the scroll the jump-to-line effect calls.
   Element.prototype.scrollIntoView = vi.fn();
+});
+afterAll(() => {
+  Element.prototype.scrollIntoView = realScrollIntoView;
 });
 afterEach(cleanup);
 
@@ -149,8 +153,7 @@ describe("SmartDiffViewer", () => {
     fireEvent.click(badge);
     // The target line has a stable anchor id and is in the document.
     expect(document.getElementById("d-src/lib/checkout.ts-3")).toBeInTheDocument();
-    // The jump-to-line scroll is deferred to the next animation frame.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    // The jump-to-line scroll is deferred across animation frames.
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
   });
 });

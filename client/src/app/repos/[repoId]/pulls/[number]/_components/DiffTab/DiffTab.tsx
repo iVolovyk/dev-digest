@@ -7,7 +7,7 @@ import { DiffViewer, type DiffCommentApi } from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment, usePrReviews } from "@/lib/hooks/reviews";
 import { useSmartDiff } from "@/lib/hooks/smart-diff";
 import { notify } from "@/lib/toast";
-import type { PrFile } from "@devdigest/shared";
+import type { PrFile, ReviewRecord } from "@devdigest/shared";
 import { SmartDiffViewer } from "./_components/SmartDiffViewer";
 
 interface DiffTabProps {
@@ -20,8 +20,13 @@ interface DiffTabProps {
 
 type Order = "smart" | "original";
 
-// The pressed segment of the order toggle — `ghost` Button has no active state
-// of its own, so lift it out of the row visually (matches `aria-pressed`).
+// `usePrReviews` is `undefined` while loading; a shared empty array keeps the
+// `reviews` prop identity stable so SmartDiffViewer's severity memo isn't busted
+// on every parent re-render (DiffTab re-renders on comment/review polling).
+const NO_REVIEWS: ReviewRecord[] = [];
+
+// The pressed segment of the order toggle — the `ghost` Button kind doesn't
+// react to `active`, so style the pressed state here (matches `aria-pressed`).
 const ACTIVE_SEGMENT: React.CSSProperties = {
   background: "var(--bg-hover)",
   color: "var(--text-primary)",
@@ -87,7 +92,6 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
                 <Button
                   kind="ghost"
                   size="sm"
-                  active={order === "smart"}
                   aria-pressed={order === "smart"}
                   style={order === "smart" ? ACTIVE_SEGMENT : undefined}
                   onClick={() => setOrder("smart")}
@@ -97,7 +101,6 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
                 <Button
                   kind="ghost"
                   size="sm"
-                  active={order === "original"}
                   aria-pressed={order === "original"}
                   style={order === "original" ? ACTIVE_SEGMENT : undefined}
                   onClick={() => setOrder("original")}
@@ -128,7 +131,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
           groups={smart.data.groups}
           splitSuggestion={smart.data.split_suggestion}
           filesByPath={filesByPath}
-          reviews={reviews ?? []}
+          reviews={reviews ?? NO_REVIEWS}
           commenting={commenting}
         />
       ) : (

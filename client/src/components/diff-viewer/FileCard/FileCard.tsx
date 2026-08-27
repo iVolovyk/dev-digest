@@ -53,6 +53,8 @@ export function FileCard({
     defaultOpen ?? (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const [flashLine, setFlashLine] = React.useState<number | null>(null);
+  const flashTimer = React.useRef<number | undefined>(undefined);
+  React.useEffect(() => () => window.clearTimeout(flashTimer.current), []);
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
 
   const findingLineSet = React.useMemo(() => new Set(findingLines ?? []), [findingLines]);
@@ -64,12 +66,17 @@ export function FileCard({
     const line = findingLines?.[0];
     if (line == null) return;
     setFlashLine(line);
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`d-${file.path}-${line}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    window.setTimeout(() => setFlashLine(null), FINDING_FLASH_MS);
+    // Two frames: the first lets React commit `open` (the target line only
+    // exists once the body renders), the second reads the now-mounted node.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`d-${file.path}-${line}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      })
+    );
+    window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashLine(null), FINDING_FLASH_MS);
   };
 
   // Group this file's comments into threads, then split into ones we can anchor
@@ -128,7 +135,8 @@ export function FileCard({
             <div style={s.noDiff}>{t("diffViewer.noDiffText")}</div>
           ) : (
             lines.map((ln, i) => {
-              const isFinding = annotate && ln.newNo != null && findingLineSet.has(ln.newNo);
+              const newNo = ln.newNo;
+              const isFinding = annotate && newNo != null && findingLineSet.has(newNo);
               return (
                 <CodeLine
                   key={i}
@@ -136,11 +144,9 @@ export function FileCard({
                   path={file.path}
                   threads={threadsForLine(ln, matched)}
                   commenting={commenting}
-                  anchorId={
-                    annotate && ln.newNo != null ? `d-${file.path}-${ln.newNo}` : undefined
-                  }
-                  annotation={isFinding ? lineAnnotations?.[ln.newNo!] : undefined}
-                  flash={flashLine != null && ln.newNo === flashLine}
+                  anchorId={annotate && newNo != null ? `d-${file.path}-${newNo}` : undefined}
+                  annotation={isFinding ? lineAnnotations?.[newNo] : undefined}
+                  flash={flashLine != null && newNo === flashLine}
                 />
               );
             })
