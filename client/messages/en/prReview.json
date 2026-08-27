@@ -51,14 +51,25 @@
     "blockers": " · {count} blockers"
   },
   "smartDiff": {
-    "coreLabel": "Core",
-    "wiringLabel": "Wiring",
-    "boilerplateLabel": "Boilerplate",
-    "largeTitle": "This PR is large ({lines} changed lines)",
-    "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
-    "filesCount": "{count} files",
-    "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "smartOrder": "Smart order",
+    "originalOrder": "Original order",
+    "filesCount": "{count, plural, one {# file} other {# files}}",
+    "largeTitle": "Large PR — {lines} changed lines",
+    "largeBody": "Consider splitting into smaller, focused PRs:",
+    "roles": {
+      "core": {
+        "title": "Core logic",
+        "subtitle": "The substance of the change — review closely"
+      },
+      "wiring": {
+        "title": "Wiring",
+        "subtitle": "Hooks the core into the app"
+      },
+      "boilerplate": {
+        "title": "Boilerplate",
+        "subtitle": "Generated / mechanical — skim"
+      }
+    }
   },
   "list": {
     "breadcrumb": "Pull Requests",

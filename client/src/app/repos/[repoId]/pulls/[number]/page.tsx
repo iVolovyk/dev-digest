@@ -64,6 +64,8 @@ export default function PRDetailPage() {
     refetchReviews();
     // A finished run may have (re)computed intent — refresh the Overview panel.
     if (prId) qc.invalidateQueries({ queryKey: ["intent", prId] });
+    // New findings change Smart Diff's finding_lines → ordering and badges.
+    if (prId) qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
   }, [invalidateActiveRuns, invalidateRunHistory, refetchReviews, prId, qc]);
 
   const tab = search.get("tab") ?? "overview";

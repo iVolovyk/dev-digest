@@ -158,6 +158,28 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-27** — `client/` has **no `@testing-library/user-event`** installed —
+  every component test uses `fireEvent` from `@testing-library/react` (see
+  `RunHistory.test.tsx`, `FindingsPanel.test.tsx`). Importing `user-event`
+  (as the `react-testing-library` skill's templates do) fails at collect time
+  with `Failed to resolve import "@testing-library/user-event"`. Use `fireEvent`
+  or add the dep deliberately; don't copy the skill's `userEvent.setup()`
+  pattern blindly.
+
+- **2026-08-27** — `<SeverityBadge>` (`@devdigest/ui`) renders the **icon only**
+  when `compact` is set — the text label (`"Critical"` / `"Warning"` /
+  `"Suggestion"`) is dropped, despite the component's own doc comment saying
+  "always icon + label (WCAG AA: never color alone)". For an inline badge a test
+  or a user needs to read, render it WITHOUT `compact`.
+  `src/vendor/ui/primitives/Badge.tsx:83`
+
+- **2026-08-27** — a jsdom test that asserts on a `requestAnimationFrame`
+  callback (e.g. a deferred `scrollIntoView` after a click) must flush the frame
+  first: `await new Promise<void>(r => requestAnimationFrame(() => r()))`. jsdom
+  has no layout, so also stub `Element.prototype.scrollIntoView = vi.fn()` in
+  `beforeAll` or the callback throws.
+  `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/_components/SmartDiffViewer/SmartDiffViewer.test.tsx`
+
 - **2026-08-12** — `Donut` (`@devdigest/ui`) is built for money: its legend
   renders `{valuePrefix}{value.toFixed(2)}` with `valuePrefix` defaulting to
   `"$"`. Charting counts (e.g. skill findings by category) MUST pass

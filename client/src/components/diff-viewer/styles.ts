@@ -64,6 +64,33 @@ export const s = {
     color: "var(--text-primary)",
     paddingRight: 12,
   } satisfies CSSProperties,
+  /** Transient highlight applied to a line after a jump-to-line (Smart Diff). */
+  lineFlash: {
+    boxShadow: "inset 3px 0 0 var(--accent)",
+    background: "var(--accent-bg)",
+    transition: "background .3s",
+  } satisfies CSSProperties,
+  /** Row under a code line holding inline severity badges (Smart Diff). */
+  lineAnnotation: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    padding: "3px 0 3px 58px",
+  } satisfies CSSProperties,
+  /** "N findings" button in a FileCard header (Smart Diff). */
+  findingsBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--warn-text, var(--warn))",
+    background: "var(--warn-bg)",
+    border: "none",
+    borderRadius: 5,
+    padding: "2px 8px",
+    cursor: "pointer",
+  } satisfies CSSProperties,
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */
