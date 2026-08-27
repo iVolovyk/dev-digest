@@ -174,10 +174,14 @@ _None yet._
   `src/vendor/ui/primitives/Badge.tsx:83`
 
 - **2026-08-27** — a jsdom test that asserts on a `requestAnimationFrame`
-  callback (e.g. a deferred `scrollIntoView` after a click) must flush the frame
-  first: `await new Promise<void>(r => requestAnimationFrame(() => r()))`. jsdom
-  has no layout, so also stub `Element.prototype.scrollIntoView = vi.fn()` in
-  `beforeAll` or the callback throws.
+  callback (e.g. a deferred `scrollIntoView` after a click) should
+  `await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalled())` rather than
+  hand-roll a frame flush — `waitFor` also survives a double-`rAF` deferral
+  (which `FileCard`'s jump-to-line uses: one frame to commit `open`, one to read
+  the now-mounted node). jsdom has no layout, so stub
+  `Element.prototype.scrollIntoView = vi.fn()` in `beforeAll` and restore the
+  real one in `afterAll` (a bare `beforeAll` stub leaks into later files in the
+  same worker).
   `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/_components/SmartDiffViewer/SmartDiffViewer.test.tsx`
 
 - **2026-08-12** — `Donut` (`@devdigest/ui`) is built for money: its legend
@@ -205,6 +209,17 @@ _None yet._
   `client/next.config.mjs`; if the dev script ever moves to Turbopack that
   webpack hook is ignored and the error comes back.
   `client/next.config.mjs`, `client/src/app/skills/_components/SkillCard/SkillCard.tsx:10`
+
+- **2026-08-27** — running `pnpm build` in `client/` while a `pnpm dev` server
+  is live corrupts the shared `.next/`: the dev server then 500s with
+  `Cannot find module './vendor-chunks/recharts@…js'` (or serves pages with no
+  CSS — the prod build's hashed chunks don't match what dev expects). Both
+  commands write the same `.next/` and the manifests interleave (compare mtimes:
+  `BUILD_ID` from the build, `app-build-manifest.json` newer from dev). Fix:
+  stop dev, `rm -rf .next`, restart `pnpm dev`. For a D9-style "does the
+  `@devdigest/shared` runtime import still resolve" check, either stop the dev
+  server first or just watch the running dev server's own compile output — don't
+  run a parallel `build`.
 
 - **2026-08-12** — adding a route makes `pnpm typecheck` fail with
   `.next/types/validator.ts(NN,52): error TS2344: Type '"/skills"' does not
