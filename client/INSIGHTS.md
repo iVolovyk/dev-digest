@@ -158,6 +158,32 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-27** — `client/` has **no `@testing-library/user-event`** installed —
+  every component test uses `fireEvent` from `@testing-library/react` (see
+  `RunHistory.test.tsx`, `FindingsPanel.test.tsx`). Importing `user-event`
+  (as the `react-testing-library` skill's templates do) fails at collect time
+  with `Failed to resolve import "@testing-library/user-event"`. Use `fireEvent`
+  or add the dep deliberately; don't copy the skill's `userEvent.setup()`
+  pattern blindly.
+
+- **2026-08-27** — `<SeverityBadge>` (`@devdigest/ui`) renders the **icon only**
+  when `compact` is set — the text label (`"Critical"` / `"Warning"` /
+  `"Suggestion"`) is dropped, despite the component's own doc comment saying
+  "always icon + label (WCAG AA: never color alone)". For an inline badge a test
+  or a user needs to read, render it WITHOUT `compact`.
+  `src/vendor/ui/primitives/Badge.tsx:83`
+
+- **2026-08-27** — a jsdom test that asserts on a `requestAnimationFrame`
+  callback (e.g. a deferred `scrollIntoView` after a click) should
+  `await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalled())` rather than
+  hand-roll a frame flush — `waitFor` also survives a double-`rAF` deferral
+  (which `FileCard`'s jump-to-line uses: one frame to commit `open`, one to read
+  the now-mounted node). jsdom has no layout, so stub
+  `Element.prototype.scrollIntoView = vi.fn()` in `beforeAll` and restore the
+  real one in `afterAll` (a bare `beforeAll` stub leaks into later files in the
+  same worker).
+  `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/_components/SmartDiffViewer/SmartDiffViewer.test.tsx`
+
 - **2026-08-12** — `Donut` (`@devdigest/ui`) is built for money: its legend
   renders `{valuePrefix}{value.toFixed(2)}` with `valuePrefix` defaulting to
   `"$"`. Charting counts (e.g. skill findings by category) MUST pass
@@ -183,6 +209,17 @@ _None yet._
   `client/next.config.mjs`; if the dev script ever moves to Turbopack that
   webpack hook is ignored and the error comes back.
   `client/next.config.mjs`, `client/src/app/skills/_components/SkillCard/SkillCard.tsx:10`
+
+- **2026-08-27** — running `pnpm build` in `client/` while a `pnpm dev` server
+  is live corrupts the shared `.next/`: the dev server then 500s with
+  `Cannot find module './vendor-chunks/recharts@…js'` (or serves pages with no
+  CSS — the prod build's hashed chunks don't match what dev expects). Both
+  commands write the same `.next/` and the manifests interleave (compare mtimes:
+  `BUILD_ID` from the build, `app-build-manifest.json` newer from dev). Fix:
+  stop dev, `rm -rf .next`, restart `pnpm dev`. For a D9-style "does the
+  `@devdigest/shared` runtime import still resolve" check, either stop the dev
+  server first or just watch the running dev server's own compile output — don't
+  run a parallel `build`.
 
 - **2026-08-12** — adding a route makes `pnpm typecheck` fail with
   `.next/types/validator.ts(NN,52): error TS2344: Type '"/skills"' does not

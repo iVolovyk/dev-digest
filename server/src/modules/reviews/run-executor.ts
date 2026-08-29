@@ -9,6 +9,12 @@ import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { renderSkillBlocks } from '../_shared/skill-blocks.js';
+import { buildPromptSectionLog } from './prompt-log.js';
+
+/** Cap a log line's echoed intent statement (the persisted record has no cap). */
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -114,6 +120,29 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Shared pre-work (like the diff): computed ONCE per batch, not once per
+    // agent. Best-effort — unlike the diff's `failAll`, an intent failure
+    // degrades to "no intent" and the review continues (§2, Risk #8).
+    let intentText: string | undefined;
+    try {
+      const record = await runLog.step(
+        'Deriving PR intent',
+        () => this.container.intentService.ensureIntent(workspaceId, pull, repo, diff.files.map((f) => f.path)),
+        { kind: 'tool' },
+      );
+      intentText = record ? this.container.intentService.formatForPrompt(record) : undefined;
+      if (record) {
+        runLog.info(
+          `PR intent: "${truncate(record.intent, 120)}" — confidence=${record.confidence} ` +
+            `(sources: ${record.sources.join(', ') || 'none'})`,
+        );
+      }
+    } catch (err) {
+      // Never let an enrichment break the run — surface only as a Live Log info,
+      // exactly like `buildSkillBlocks` / `buildRepoMapDigest` below.
+      runLog.info(`PR intent: unavailable — ${(err as Error).message}; continuing without it`);
+    }
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -121,7 +150,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intentText, logger);
         logger?.info(
           {
             runId,
@@ -153,6 +182,8 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intentText: string | undefined,
+    logger: Logger | undefined,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -222,6 +253,9 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Derived PR intent/scope (§2/§5a) — same omit-when-absent contract;
+        // a missing intent produces a byte-identical prompt to today.
+        ...(intentText ? { intent: intentText } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -230,6 +264,28 @@ export class ReviewRunExecutor {
         },
       });
       const { tokensIn, tokensOut, grounding, costUsd } = outcome;
+
+      // Safe structured prompt-assembly log — section name, trust
+      // classification, and size (chars + tokens) ONLY; never section
+      // content, the full diff, or spec text (`buildPromptSectionLog` returns
+      // counts, not strings — see its doc comment). `debug` level means this
+      // is silent by default and only appears when a developer sets
+      // `LOG_LEVEL=debug` locally (`server/.env`); it never fires in the
+      // default ('info') or production config, and never reaches the SSE
+      // Live Log or the persisted run trace (both go through `runLog`, not
+      // this raw pino `logger`).
+      logger?.debug(
+        {
+          correlationId: runId,
+          workspaceId,
+          prId: pull.id,
+          agent: agent.name,
+          provider: agent.provider,
+          model: agent.model,
+          sections: buildPromptSectionLog(outcome.assembly, diff.raw, this.container.tokenizer),
+        },
+        'prompt assembly',
+      );
 
       const keptFindings = outcome.review.findings;
 

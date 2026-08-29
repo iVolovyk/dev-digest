@@ -27,6 +27,12 @@ import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
+import { IntentContextRepository } from '../modules/intent/repository.js';
+import { IntentService } from '../modules/intent/service.js';
+import { INTENT_FEATURE_ID } from '../modules/intent/constants.js';
+import { SmartDiffRepository } from '../modules/smart-diff/repository.js';
+import { SmartDiffService } from '../modules/smart-diff/service.js';
+import { resolveFeatureModel } from '../modules/_shared/feature-models.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 
@@ -76,6 +82,10 @@ export class Container {
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
   private _priceBook?: PriceBook;
+  private _intentContextRepo?: IntentContextRepository;
+  private _intentService?: IntentService;
+  private _smartDiffRepo?: SmartDiffRepository;
+  private _smartDiffService?: SmartDiffService;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -98,6 +108,40 @@ export class Container {
 
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
+  }
+
+  /** Intent module's own supporting queries (pull/repo context, commit
+   *  messages, changed file paths) — `pr_intent` itself is owned by
+   *  `reviewRepo` (Risk #9). */
+  get intentContextRepo(): IntentContextRepository {
+    return (this._intentContextRepo ??= new IntentContextRepository(this.db));
+  }
+
+  /** PR intent classifier, wired here (not in `modules/intent/routes.ts`
+   *  alone) so `run-executor.ts` (a sibling module) can reach it via
+   *  `container.intentService` — cross-module sharing through the
+   *  composition root (R5), mirroring `agentsRepo`/`reviewRepo`.
+   *  `reviewRepo` doubles as the `IntentStore` port it needs (Risk #9). */
+  get intentService(): IntentService {
+    return (this._intentService ??= new IntentService(
+      this.reviewRepo,
+      this.intentContextRepo,
+      this.git,
+      () => this.github(),
+      (provider) => this.llm(provider),
+      (workspaceId) => resolveFeatureModel(this, workspaceId, INTENT_FEATURE_ID),
+    ));
+  }
+
+  /**
+   * Smart Diff read model (risk-ordered file review). The service constructor
+   * takes ONLY this repository — no LLM, no Container — which is the structural
+   * guarantee that Smart Diff makes no model call (smart-diff-plan.md §2).
+   */
+  get smartDiffService(): SmartDiffService {
+    return (this._smartDiffService ??= new SmartDiffService(
+      (this._smartDiffRepo ??= new SmartDiffRepository(this.db)),
+    ));
   }
 
   get codeIndex(): CodeIndex {

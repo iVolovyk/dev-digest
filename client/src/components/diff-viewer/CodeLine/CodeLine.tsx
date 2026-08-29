@@ -14,11 +14,22 @@ export function CodeLine({
   path,
   threads,
   commenting,
+  anchorId,
+  annotation,
+  flash,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  /** Stable DOM id for jump-to-line navigation (Smart Diff). Undefined in the
+   *  plain DiffViewer — behaviour there is unchanged. */
+  anchorId?: string;
+  /** Node rendered inline under this line (Smart Diff severity badges).
+   *  Domain-free — the caller decides what to render. */
+  annotation?: React.ReactNode;
+  /** Transient highlight after a jump-to-line. */
+  flash?: boolean;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -37,11 +48,12 @@ export function CodeLine({
 
   return (
     <div
+      id={anchorId}
       style={cs.rowWrap}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind)}>
+      <div style={flash ? { ...lineRowFor(ln.kind), ...s.lineFlash } : lineRowFor(ln.kind)}>
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button
@@ -63,6 +75,8 @@ export function CodeLine({
           {ln.text || " "}
         </span>
       </div>
+
+      {annotation != null && <div style={s.lineAnnotation}>{annotation}</div>}
 
       {commenting &&
         commenting.showComments &&

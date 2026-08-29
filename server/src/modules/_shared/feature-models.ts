@@ -4,8 +4,21 @@ import {
   FeatureModelChoice,
   type FeatureModelId,
 } from '@devdigest/shared';
-import type { Container } from '../../platform/container.js';
+import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
+
+/**
+ * Narrow structural shape instead of `import type { Container }`: this file
+ * only ever reads `container.db`, and `Container` itself now constructs an
+ * `IntentService` (`platform/container.ts`) that resolves ITS feature model
+ * through this file — importing the full `Container` type here would close a
+ * type-only cycle back through `container.ts` and add a new `pnpm arch`
+ * warning (baseline is a fixed 41). Any object with a `db` satisfies this,
+ * `Container` included.
+ */
+interface FeatureModelsContainer {
+  db: Db;
+}
 
 /**
  * Per-feature model configuration.
@@ -33,7 +46,7 @@ export function defaultFeatureModel(id: FeatureModelId): FeatureModelChoice {
  * `resolveFeatureModel` instead.
  */
 export async function getFeatureModelOverride(
-  container: Container,
+  container: FeatureModelsContainer,
   workspaceId: string,
   id: FeatureModelId,
 ): Promise<FeatureModelChoice | undefined> {
@@ -50,7 +63,7 @@ export async function getFeatureModelOverride(
 
 /** Resolve `id` to a concrete provider+model: workspace override, else registry default. */
 export async function resolveFeatureModel(
-  container: Container,
+  container: FeatureModelsContainer,
   workspaceId: string,
   id: FeatureModelId,
 ): Promise<FeatureModelChoice> {

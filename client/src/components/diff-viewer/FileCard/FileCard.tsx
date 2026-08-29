@@ -6,7 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { PrFile } from "@/lib/types";
-import { AUTO_EXPAND_MAX_LINES } from "../constants";
+import { AUTO_EXPAND_MAX_LINES, FINDING_FLASH_MS } from "../constants";
 import { parsePatch, type Line } from "../helpers";
 import {
   buildThreads,
@@ -30,12 +30,54 @@ function threadsForLine(ln: Line, matched: Map<string, CommentThread[]>): Commen
   return out;
 }
 
-export function FileCard({ file, commenting }: { file: PrFile; commenting?: DiffCommentApi }) {
+export function FileCard({
+  file,
+  commenting,
+  defaultOpen,
+  findingLines,
+  lineAnnotations,
+}: {
+  file: PrFile;
+  commenting?: DiffCommentApi;
+  /** Overrides the size-based auto-expand. `undefined` → today's behaviour. */
+  defaultOpen?: boolean;
+  /** New-file line numbers carrying a review finding (Smart Diff). Drives the
+   *  header "N findings" badge, per-line markers, and jump-to-line. */
+  findingLines?: number[];
+  /** New-file line number → node rendered inline on that line (severity
+   *  badges). Domain-free; the caller builds the nodes. */
+  lineAnnotations?: Record<number, React.ReactNode>;
+}) {
   const t = useTranslations("shell");
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    defaultOpen ?? (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
+  const [flashLine, setFlashLine] = React.useState<number | null>(null);
+  const flashTimer = React.useRef<number | undefined>(undefined);
+  React.useEffect(() => () => window.clearTimeout(flashTimer.current), []);
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+
+  const findingLineSet = React.useMemo(() => new Set(findingLines ?? []), [findingLines]);
+  const findingCount = findingLines?.length ?? 0;
+  const annotate = findingLines !== undefined;
+
+  const jumpToFirstFinding = () => {
+    setOpen(true);
+    const line = findingLines?.[0];
+    if (line == null) return;
+    setFlashLine(line);
+    // Two frames: the first lets React commit `open` (the target line only
+    // exists once the body renders), the second reads the now-mounted node.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`d-${file.path}-${line}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      })
+    );
+    window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashLine(null), FINDING_FLASH_MS);
+  };
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
@@ -64,6 +106,20 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
         </span>
+        {findingCount > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              jumpToFirstFinding();
+            }}
+            style={s.findingsBadge}
+            aria-label={t("diffViewer.findingsCount", { count: findingCount })}
+          >
+            <Icon.AlertTriangle size={12} />
+            {t("diffViewer.findingsCount", { count: findingCount })}
+          </button>
+        )}
         {commentCount > 0 && (
           <span
             style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-muted)" }}
@@ -78,15 +134,22 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
           {lines.length === 0 ? (
             <div style={s.noDiff}>{t("diffViewer.noDiffText")}</div>
           ) : (
-            lines.map((ln, i) => (
-              <CodeLine
-                key={i}
-                ln={ln}
-                path={file.path}
-                threads={threadsForLine(ln, matched)}
-                commenting={commenting}
-              />
-            ))
+            lines.map((ln, i) => {
+              const newNo = ln.newNo;
+              const isFinding = annotate && newNo != null && findingLineSet.has(newNo);
+              return (
+                <CodeLine
+                  key={i}
+                  ln={ln}
+                  path={file.path}
+                  threads={threadsForLine(ln, matched)}
+                  commenting={commenting}
+                  anchorId={annotate && newNo != null ? `d-${file.path}-${newNo}` : undefined}
+                  annotation={isFinding ? lineAnnotations?.[newNo] : undefined}
+                  flash={flashLine != null && newNo === flashLine}
+                />
+              );
+            })
           )}
           {commenting && commenting.showComments && <OutdatedComments threads={outdated} />}
         </div>

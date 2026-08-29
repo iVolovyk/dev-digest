@@ -1,6 +1,7 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, RunSummary, RunTrace } from '@devdigest/shared';
+import type { PrIntentRecordWithHash, UpsertIntentValues } from './repository/pull.repo.js';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -11,6 +12,13 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
  * The query implementations are colocated, split by aggregate, under
  * `./repository/` (review+findings, agent runs, pull/intent). This class
  * composes them so its public API stays identical.
+ *
+ * `pr_intent` (`upsertIntent`/`getIntent` below): this remains the SOLE
+ * writer, extended to the full 7-field shape (`confidence`, `risk_areas`,
+ * `sources`, `input_hash`, `head_sha`, `model`, `computed_at`) — user decision
+ * 2026-08-25 (Risk #9). `modules/intent/` reaches it through a narrow local
+ * `IntentStore` port satisfied structurally by `container.reviewRepo`, never
+ * by importing this module (R5).
  */
 
 import type { FindingRow, PullRow } from '../../db/rows.js';
@@ -126,12 +134,14 @@ export class ReviewRepository {
   }
 
   // ---- intent -------------------------------------------------------------
+  // Structurally satisfies `modules/intent/service.ts`'s local `IntentStore`
+  // port — no sibling-module import needed (R5).
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  upsertIntent(prId: string, values: UpsertIntentValues): Promise<PrIntentRecordWithHash> {
+    return pullRepo.upsertIntent(this.db, prId, values);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
+  getIntent(prId: string): Promise<PrIntentRecordWithHash | undefined> {
     return pullRepo.getIntent(this.db, prId);
   }
 
