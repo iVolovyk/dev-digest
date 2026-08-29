@@ -1,9 +1,10 @@
 {
+  "sectionLabel": "Blast radius",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
     "endpoints": "endpoints",
-    "crons": "cron/jobs"
+    "crons": "cron"
   },
   "view": {
     "tree": "tree",
@@ -11,6 +12,26 @@
   },
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "truncation": "showing {shown} of {total}",
+  "symbolMeta": "{kind} · {file}",
+  "endpointHops": "{endpoint} · {depth} import hop(s) away",
+  "depthCaveat": "Downstream impact is bounded to 2 import hops — an endpoint that is not listed may still be affected. Dynamic dispatch, DI containers and string-keyed routing are invisible to this walk.",
+  "partialCaveat": "This impact map is known to be incomplete ({reason}). Treat an absent dependency as unproven, not disproven.",
+  "reason": {
+    "partial_index": "computed from a partial index",
+    "caller_cap": "the caller list was capped",
+    "reverse_walk_truncated": "the dependency walk was truncated",
+    "index_unavailable": "the index is unavailable"
+  },
+  "cannotCompute": {
+    "title": "Impact can't be computed",
+    "body": "This repository is not fully indexed ({state}), so downstream impact is unknown. This does not mean nothing else is affected.",
+    "cta": "Open the repo's Context page"
+  },
+  "empty": {
+    "title": "No downstream impact found",
+    "body": "{count} changed symbol(s), and the full index shows nothing downstream of them."
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"

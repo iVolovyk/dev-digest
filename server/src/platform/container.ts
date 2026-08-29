@@ -32,6 +32,8 @@ import { IntentService } from '../modules/intent/service.js';
 import { INTENT_FEATURE_ID } from '../modules/intent/constants.js';
 import { SmartDiffRepository } from '../modules/smart-diff/repository.js';
 import { SmartDiffService } from '../modules/smart-diff/service.js';
+import { BlastRepository } from '../modules/blast/repository.js';
+import { BlastService } from '../modules/blast/service.js';
 import { resolveFeatureModel } from '../modules/_shared/feature-models.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
@@ -86,6 +88,7 @@ export class Container {
   private _intentService?: IntentService;
   private _smartDiffRepo?: SmartDiffRepository;
   private _smartDiffService?: SmartDiffService;
+  private _blastService?: BlastService;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -141,6 +144,20 @@ export class Container {
   get smartDiffService(): SmartDiffService {
     return (this._smartDiffService ??= new SmartDiffService(
       (this._smartDiffRepo ??= new SmartDiffRepository(this.db)),
+    ));
+  }
+
+  /**
+   * Blast Radius read model (impact map for a PR). The constructor takes a
+   * repository and the `repoIntel` facade as a narrow port — no LLM, no
+   * `Container` — the structural guarantee that the main path makes no model
+   * call (blast-radius-plan §2). `this.repoIntel` satisfies `BlastIntel`
+   * structurally.
+   */
+  get blastService(): BlastService {
+    return (this._blastService ??= new BlastService(
+      new BlastRepository(this.db),
+      this.repoIntel,
     ));
   }
 

@@ -59,6 +59,31 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-29** — `RepoIntelService.getBlastRadius` has TWO paths and the
+  fallback re-reads the clone ON THE HOT PATH: `tryPersistentBlast` returns
+  `null` when `repo_index_state.status` is missing or not in `{full, partial}`
+  (`service.ts:319`), and control falls through to a ripgrep best-effort that
+  calls `container.codeIndex.symbols(ref)` over the whole repo and
+  `readClone(...)` + `extractEndpoints(...)` per caller file
+  (`service.ts:244,291`). Fine for `run-executor`'s prompt enrichment; a
+  violation for any consumer whose contract says "no AST/graph rebuild during
+  the request". Such a consumer (blast) must call `getIndexState` FIRST and
+  only call `getBlastRadius` when `status ∈ {full, partial}` — the gate is the
+  consumer's own policy, not a facade flag.
+  `src/modules/blast/service.ts` (`build`, the §3 gate)
+
+- **2026-08-29** — the `MAX_CALLERS_PER_SYMBOL = 20` cap in
+  `tryPersistentBlast` is applied to the WHOLE flat caller list, not per
+  symbol: `callers.slice(0, MAX_CALLERS_PER_SYMBOL)` runs AFTER the global
+  `rank DESC` sort (`service.ts:372,386`), so a PR changing 5 symbols gets 20
+  callers total and a high-rank symbol can starve the rest. Reads as a bug;
+  it isn't — no consumer relied on per-symbol semantics until `modules/blast`,
+  which re-caps per symbol after grouping and treats
+  `blast.callers.length >= 20` as "globally truncated" (sets `partial`). If a
+  real PR shows wrong per-symbol counts, the fix is a `limit` param on the
+  facade call, not changing the slice.
+  `src/modules/repo-intel/service.ts:386`, `src/modules/blast/service.ts`
+
 - **2026-08-12** — `waitForPrRuns` only waits for `agent_runs.status` to go
   terminal, and `completeAgentRun` is NOT a run's last write: the executor still
   writes `run_skills` and then `run_traces` after it

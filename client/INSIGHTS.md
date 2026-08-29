@@ -112,6 +112,14 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-29** — there is **no `Stat` primitive** in `@devdigest/ui` (nor a
+  `RunCostBadge`, per the 2026-08-06 decision). Specs sometimes name "the
+  `Stat` primitive" for a label+value tile — build it inline in the
+  component's `styles.ts` (a `value` span + an uppercase `label` span), the
+  way `IntentPanel` and `BlastRadiusPanel` do. Don't add one to the vendored
+  package for a single feature.
+  `src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/_components/BlastRadiusPanel/BlastRadiusPanel.tsx`
+
 - **2026-08-09** — the `@/*` → `./src/*` alias IS configured
   (`client/tsconfig.json`), but only ~24 imports use it; route components
   reach for deep relative chains instead, e.g.

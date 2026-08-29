@@ -87,6 +87,30 @@ export interface BlastResult {
 }
 
 // ---------------------------------------------------------------------------
+// Reverse-import walk (facade method `getReverseDependents`). Used by blast to
+// find HTTP endpoints / cron jobs downstream of a changed file. The walk lives
+// HERE, not in blast: repo-intel owns edge direction, the INDEXER_VERSION the
+// edges were built under, the fan-out cap, and the depth convention.
+// ---------------------------------------------------------------------------
+
+export interface ReverseDependentRow {
+  file: string;
+  /** 0 = the changed file itself, 1 = a direct importer, 2 = an importer of one. */
+  depth: number;
+  /** From `file_facts` — joined inside repo-intel so blast makes one call. */
+  endpoints: string[];
+  crons: string[];
+}
+
+export interface ReverseDependentsResult {
+  dependents: ReverseDependentRow[];
+  /** True when MAX_REVERSE_DEPENDENTS clipped the frontier — "N of M". */
+  truncated: boolean;
+  degraded?: boolean;
+  reason?: DegradedReason;
+}
+
+// ---------------------------------------------------------------------------
 // Read-model rows.
 // ---------------------------------------------------------------------------
 
@@ -145,6 +169,17 @@ export interface RepoIntel {
 
   // --- Reads --------------------------------------------------------------
   getBlastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult>;
+  /**
+   * Bounded reverse-import walk out from `files`: which files import them,
+   * transitively, up to `depth` hops (default + max `BFS_DEPTH`), with each
+   * file's `file_facts` endpoints/crons attached. Depth-0 rows are the input
+   * files themselves. Degrades to `{ dependents: [], truncated: false }`.
+   */
+  getReverseDependents(
+    repoId: string,
+    files: string[],
+    depth?: number,
+  ): Promise<ReverseDependentsResult>;
   getRepoMap(repoId: string, tokenBudget?: number): Promise<RepoMapResult>;
   getFileRank(repoId: string, paths: string[]): Promise<FileRankRow[]>;
   getSymbolsInFiles(repoId: string, paths: string[]): Promise<SymbolRow[]>;
