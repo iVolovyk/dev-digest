@@ -436,6 +436,23 @@ export class RepoIntelRepository {
       .where(eq(t.fileEdges.repoId, repoId));
   }
 
+  /**
+   * Files that import any of `files` — one BFS level of the REVERSE import
+   * graph. Served directly by `file_edges_repo_to_idx` on `(repo_id, to_file)`.
+   *
+   * Deliberately NOT `getEdges(repoId)`: that loads the repo's whole edge set
+   * (up to MAX_INDEXED_FILES files' worth) into JS. This answers "who depends
+   * on these ~20 changed files?" in O(degree) with one indexed query per level.
+   */
+  async getImportersOf(repoId: string, files: string[]): Promise<string[]> {
+    if (files.length === 0) return [];
+    const rows = await this.db
+      .selectDistinct({ fromFile: t.fileEdges.fromFile })
+      .from(t.fileEdges)
+      .where(and(eq(t.fileEdges.repoId, repoId), inArray(t.fileEdges.toFile, files)));
+    return rows.map((r) => r.fromFile);
+  }
+
   /** `{path, percentile}` for the given paths (smart-diff / run-executor). */
   async getFileRankFor(repoId: string, paths: string[]): Promise<FileRankRow[]> {
     if (paths.length === 0) return [];

@@ -46,11 +46,23 @@ export const BlastCaller = z.object({
 });
 export type BlastCaller = z.infer<typeof BlastCaller>;
 
+/**
+ * Index tier a blast map was computed from. `full` / `partial` = the map is
+ * asserted from the persistent index; `degraded` / `failed` = the map COULD
+ * NOT be computed — an empty `downstream` there means "unknown", never
+ * "nothing is impacted".
+ */
+export const BlastIndexState = z.enum(['full', 'partial', 'degraded', 'failed']);
+export type BlastIndexState = z.infer<typeof BlastIndexState>;
+
 export const DownstreamImpact = z.object({
   symbol: z.string(),
   callers: z.array(BlastCaller),
   endpoints_affected: z.array(z.string()),
   crons_affected: z.array(z.string()),
+  /** Total callers before the per-symbol cap — renders "showing 20 of 137".
+   *  `.default(0)` so an older persisted payload still parses. */
+  callers_total: z.number().int().default(0),
 });
 export type DownstreamImpact = z.infer<typeof DownstreamImpact>;
 
@@ -58,6 +70,20 @@ export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  /** Index tier the map was computed from. `full`/`partial` = asserted;
+   *  `degraded`/`failed` = COULD NOT COMPUTE, not "nothing impacted".
+   *  Default is the pessimistic value — an un-widened payload is treated as
+   *  possibly incomplete. */
+  index_state: BlastIndexState.default('degraded'),
+  /** True whenever the map is known to be incomplete (bad index, a cap bit,
+   *  or the 2-hop reverse-walk bound clipped the frontier). Never render a
+   *  clean empty map. */
+  partial: z.boolean().default(true),
+  /** Machine-readable why, for the UI's banner copy. */
+  reason: z.string().nullish(),
+  /** True only when `summary` came from the optional model call (§7b of the
+   *  blast-radius plan). The deterministic main-path summary sets it false. */
+  summary_generated: z.boolean().default(false),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 

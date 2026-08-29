@@ -28,7 +28,7 @@ Five tools, no more:
 | `run_agent_on_pr` | Review this PR with this agent — **one call**, findings back |
 | `get_findings` | What did the last review of this PR say |
 | `get_conventions` | What conventions has DevDigest extracted for this repo (**cache-only**) |
-| `get_blast_radius` | Registered, discoverable, and honestly `not_implemented` |
+| `get_blast_radius` | Impact map for a PR — changed symbols, callers, downstream endpoints/cron jobs (L04) |
 
 The package is a **thin HTTP client + protocol adapter**. It owns no data, no
 Postgres pool, no job runner, no LLM key. Every capability it exposes already
@@ -385,7 +385,7 @@ errors to language models to enable self-correction"*, while protocol errors are
 | API unreachable / 5xx / timeout | **`isError: true`** | Not model-correctable, but the *user* can fix it and the message must reach them. Returning a protocol error here buries it. |
 | Wait timed out with the run still going | **not an error** | A valid outcome. `structuredContent.status = "timed_out"` + a message pointing at `get_findings` (§6.2). |
 | `get_conventions` with nothing cached | **not an error** | A valid empty result. `status = "no_conventions_cached"` + explanation (§6.4). |
-| `get_blast_radius` | **not an error** | `status = "not_implemented"` (§6.5). |
+| `get_blast_radius` on a degraded/un-indexed repo | **not an error** | A valid map with `index_state = "degraded"` + `partial = true` (§6.5). |
 
 `src/tools/result.ts` exposes exactly two constructors so this never gets
 decided ad hoc per tool:
@@ -442,7 +442,7 @@ two ever disagree.
 | `run_agent_on_pr` | `Run a DevDigest review agent on a pull request and return its findings. Creates the run, waits for it to finish, and returns the result — one call, no polling needed. Takes up to several minutes.` |
 | `get_findings` | `Get the findings from the most recent completed review of a pull request. Use run_agent_on_pr first if the PR has not been reviewed.` |
 | `get_conventions` | `Get the coding conventions DevDigest has already extracted for a repo. Read-only — this never triggers extraction.` |
-| `get_blast_radius` | `Not implemented yet. Reserved for impact analysis of a PR's changes (which symbols and callers it affects).` |
+| `get_blast_radius` | `Get the blast radius of a pull request: which symbols changed, who calls them, and which HTTP endpoints and cron jobs sit downstream. Read-only; served from the repository index.` |
 
 Why each string is shaped the way it is — the four design principles (see
 Context) are acceptance criteria for *behavior*, and these descriptions are
@@ -465,10 +465,11 @@ the tool, not just something the implementation satisfies after the fact:
 - **`get_conventions`** — "this never triggers extraction" directly protects
   the cache-only decision (§6.4): without it, an empty result reasonably
   reads as a bug rather than an accurate report of "nothing cached yet."
-- **`get_blast_radius`** — "Not implemented yet" up front means the model
-  learns the tool's status for free from `tools/list`, never spending a call
-  to discover it — the stub-honesty rule applied at the description layer,
-  not just the response payload.
+- **`get_blast_radius`** — leads with the concrete question it answers ("which
+  symbols changed, who calls them, and which HTTP endpoints and cron jobs sit
+  downstream"), then "Read-only; served from the repository index" so the model
+  knows it is cheap and safe to call speculatively. Wired to the API in L04
+  (`server/specs/blast-radius-plan.md`).
 
 Naming and length both already satisfy the MCP conventions this plan was
 built against: `snake_case`, ≤64 chars (`registry.test.ts` asserts both), and
@@ -813,53 +814,31 @@ z.object({
 
 ---
 
-### 6.5 `get_blast_radius` — a real stub
+### 6.5 `get_blast_radius` — wired (L04)
 
-- **Decision: registered in `tools/list`, fully schema'd, returning a structured
-  `not_implemented`.** Not omitted, not faked. The tool surface is stable from
-  day one, so an MCP client that caches `tools/list` (the spec allows `ttlMs` /
-  `cacheScope`) does not need to re-discover the server when L04 lands, and no
-  caller ever gets fabricated impact analysis.
-- **Description:** *"Not implemented yet. Reserved for impact analysis of a
-  PR's changes (which symbols and callers it affects)."* The description is
-  where "not yet" belongs — a model reading `tools/list` should not spend a call
-  to find out.
+- **Status: implemented.** Wired to `GET /pulls/:id/blast` by L04
+  (`server/specs/blast-radius-plan.md`), which added the HTTP route this tool
+  needed. The `{ repo, pr }` input signature, declared as final in the original
+  stub, is unchanged.
+- **Description:** *"Get the blast radius of a pull request: which symbols
+  changed, who calls them, and which HTTP endpoints and cron jobs sit
+  downstream. Read-only; served from the repository index."*
 - **Input:** `z.object({ repo: z.string(), pr: z.number().int().positive() })`
-  — the final signature, declared now so it never changes.
-- **Output:**
-
-```ts
-z.object({
-  status: z.literal('not_implemented'),
-  feature: z.literal('blast_radius'),
-  message: z.string(),
-})
-```
-
-- **Exact response** (`isError: false` — nothing failed, and the model cannot
-  self-correct its way to an implementation; flagging it `isError` invites a
-  retry loop):
-
-```json
-{
-  "status": "not_implemented",
-  "feature": "blast_radius",
-  "message": "get_blast_radius is not implemented yet. It is registered so the tool surface stays stable, and will return impacted symbols and callers in a later DevDigest release. For risk signals on this PR today, use get_findings (or run_agent_on_pr if it has not been reviewed)."
-}
-```
-
+  — unchanged from the stub.
+- **Handler** (on the `get_findings` shape): resolve repo → resolve pull →
+  `GET /pulls/:id/blast` (parsed through `BlastRadiusView`) →
+  `compactBlast(...)` (`src/shape/blast.ts`, pure) → `ok({ repo, pr, ...compact })`.
+- **Output:** the compact map — `summary`, `index_state`, `partial`, `reason`,
+  `summary_generated`, `changed_symbols` (each `"name (kind) path"`), and
+  `downstream[]` (each `{ symbol, callers: ["name path:line"], callers_shown,
+  callers_total, endpoints, crons }`). `index_state` / `partial` /
+  `callers_total` survive into the payload — a degraded or truncated map an
+  agent can't tell apart from a complete one is the same false-confidence
+  failure as the studio UI's.
 - **Annotations:** `readOnlyHint: true`, `idempotentHint: true`,
-  `openWorldHint: false` — describing the tool it will be, not the stub.
-- **It makes no HTTP call at all.** It does not resolve `repo`/`pr` (no point
-  validating inputs it will not use, and resolution costs a GitHub round-trip).
-- **Explicitly out of scope: wiring it to `RepoIntel.getBlastRadius()`.** That
-  method exists (`server/src/modules/repo-intel/service.ts:220`, declared at
-  `types.ts:147`, documented as *"used by L04"* in
-  `server/src/modules/repo-intel/README.md:41`) and the `BlastRadius` contract
-  is written (`contracts/brief.ts:57-62`) — but **it has no HTTP route**
-  (`repo-intel/routes.ts` exposes only `/index-state` and `/resync`). Wiring it
-  would mean adding a server endpoint, which is a `server/` change this plan
-  forbids. Deferred to its own lesson and its own plan.
+  `openWorldHint: false`.
+- **It makes no LLM call** — the server's main path is model-free, and this
+  tool only forwards.
 
 ---
 
@@ -977,7 +956,8 @@ Hermetic suite (`test/*.test.ts`), fetch injected via `createApiClient({ fetch }
 | `run-agent-on-pr.test.ts` | The full create → poll → fetch sequence against a scripted fetch: `running`, `running`, `done`; asserts exactly **one** POST; asserts the review is selected by `run_id` when two reviews exist; `failed` carries `RunSummary.error` through; timeout yields `status: 'timed_out'` **and `isError: false`** and mentions `get_findings`; POST 429 is **not** retried and the message says "wait about a minute"; a poll 429 **is** retried. |
 | `get-findings.test.ts` | No reviews → `isError: true` naming `run_agent_on_pr`; `agent` filter narrows; `other_reviews` populated. |
 | `get-conventions.test.ts` | **`/conventions/extract` is never called** (assert on the recorded request list — this is the cache-only guarantee, and an assertion is the only thing that keeps it true); empty → `no_conventions_cached` + `isError: false` + explanatory text; `evidence` joined to `"path:start-end"`; `evidence_snippet` absent. |
-| `get-blast-radius.test.ts` | Returns the exact `not_implemented` payload; `isError: false`; **zero HTTP calls made**. |
+| `get-blast-radius.test.ts` | Resolves repo + pull, calls **exactly one** `GET /pulls/:id/blast`, returns the compact payload, `isError: false`. Repo/pull miss → forward-guiding messages. A degraded map is forwarded **with** its `index_state`. An API shape mismatch → the drift message. |
+| `shape-blast.test.ts` | `compactBlast` is pure: `{file,line}` folds to `"path:line"`; `callers_shown`/`callers_total`/`index_state`/`partial` survive; an empty `downstream` is `[]`, not `undefined`. |
 | `registry.test.ts` | All **5** tools registered — `get_blast_radius` included (its whole point). Every name `snake_case`, ≤64 chars, matches `/^[a-z][a-z0-9_]*$/`. **Every tool's `description` equals its §6.-1 string exactly (byte-for-byte)** — the drift guard that keeps an implementer from paraphrasing. Annotations present and correct per §6 (the four read tools `readOnlyHint: true`; `run_agent_on_pr` `idempotentHint: false` + `openWorldHint: true`). Registry order is deterministic. |
 
 **Manual / optional live check — `pnpm test:live`, never in CI.**
@@ -1027,7 +1007,7 @@ Then walk this, in order — each step also exercises one design principle:
 | 3 | "run the Security Reviewer on acme/payments-api PR 7" | **One** tool call. It blocks for up to minutes, then returns verdict + findings. Cross-check the studio at :3002 — the same run appears in the PR's Timeline (principle 1) |
 | 4 | "what did the last review of acme/payments-api#7 find" | Same findings, no new run created (check the Timeline gains no row) |
 | 5 | "get the conventions for acme/payments-api" | Either rules, or the explicit "not extracted yet" message. **Then confirm in the server log that no LLM call was made** and that `conventions` rows are unchanged — the cache-only guarantee, verified observationally |
-| 6 | "what's the blast radius of acme/payments-api#7" | The `not_implemented` payload, verbatim. Not an error, not invented data |
+| 6 | "what's the blast radius of acme/payments-api#7" | A compact structured map — `summary`, `index_state`, `changed_symbols`, `downstream[]` with `callers_shown`/`callers_total`. Not invented data |
 | 7 | "run Security Reviewer on acme/nonexistent PR 999" | Forward-guiding error listing real repo names — the model should self-correct without being told (principle 4) |
 | 8 | Stop the API (`Ctrl-C` in `server/`), retry step 2 | The exact "Cannot reach the DevDigest API at http://localhost:3001. Start it first: ./scripts/dev.sh…" message |
 | 9 | Tail the MCP server's stderr throughout | Logs on **stderr only**. If the client ever reports a JSON parse error, something wrote to stdout (§5) |
@@ -1038,8 +1018,6 @@ Then walk this, in order — each step also exercises one design principle:
   states the constraints it was designed against; it does not self-certify.
 - **Any change to `server/`** — no new endpoint, no contract edit, no migration.
   Including the tempting `GET /repos?full_name=` (Open Question 2).
-- **Wiring `get_blast_radius` to `RepoIntel.getBlastRadius()`** — §6.5. Needs a
-  server route, which is a `server/` change. Its own lesson, its own plan.
 - **Triggering convention extraction** (`POST /repos/:id/conventions/extract`) —
   §6.4. Expensive, LLM-backed, and destructive of existing candidates.
 - **A sixth tool**, of any kind. Five is the scope. Obvious candidates

@@ -105,6 +105,39 @@ export const ReviewView = z.object({
 export type ReviewView = z.infer<typeof ReviewView>;
 export const ReviewsListView = z.array(ReviewView);
 
+// ← BlastRadius, server/src/vendor/shared/contracts/brief.ts:34-95
+//   (response alias BlastRadiusResponse, review-api.ts:73-77)
+// `index_state` / `partial` / `callers_total` MUST survive into the MCP payload
+// — an agent reading a truncated or degraded map without being told is the same
+// false-confidence failure as the studio UI's, one layer down.
+export const BlastCallerView = z.object({
+  name: z.string(),
+  file: z.string(),
+  line: z.number().int(),
+});
+export const BlastDownstreamView = z.object({
+  symbol: z.string(),
+  callers: z.array(BlastCallerView),
+  endpoints_affected: z.array(z.string()),
+  crons_affected: z.array(z.string()),
+  callers_total: z.number().int(),
+});
+export const BlastChangedSymbolView = z.object({
+  name: z.string(),
+  file: z.string(),
+  kind: z.string(),
+});
+export const BlastRadiusView = z.object({
+  changed_symbols: z.array(BlastChangedSymbolView),
+  downstream: z.array(BlastDownstreamView),
+  summary: z.string(),
+  index_state: z.enum(['full', 'partial', 'degraded', 'failed']),
+  partial: z.boolean(),
+  reason: z.string().nullish(),
+  summary_generated: z.boolean(),
+});
+export type BlastRadiusView = z.infer<typeof BlastRadiusView>;
+
 // ← ConventionCandidate, server/src/vendor/shared/contracts/knowledge.ts:223-235
 export const ConventionCandidateView = z.object({
   rule: z.string(),

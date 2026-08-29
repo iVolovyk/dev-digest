@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/server';
-import { ok } from './result.js';
-import type { ToolDef, ToolDeps } from './shared.js';
+import { BlastRadiusView } from '../api/schemas.js';
+import { seg } from '../api/client.js';
+import { compactBlast } from '../shape/blast.js';
+import { ok, toolError } from './result.js';
+import { apiErrorToToolResult, type ToolDef, type ToolDeps } from './shared.js';
+import { pullMissMessage, repoMissMessage } from './resolution-messages.js';
 
 // Verbatim from plan §6.-1 — do not paraphrase.
 const DESCRIPTION =
-  "Not implemented yet. Reserved for impact analysis of a PR's changes (which symbols and callers it affects).";
+  'Get the blast radius of a pull request: which symbols changed, who calls them, ' +
+  'and which HTTP endpoints and cron jobs sit downstream. Read-only; served from ' +
+  'the repository index.';
 
 // The final signature, declared now so it never changes.
 const inputSchema = z.object({
@@ -14,22 +20,50 @@ const inputSchema = z.object({
 });
 
 const outputSchema = z.object({
-  status: z.literal('not_implemented'),
-  feature: z.literal('blast_radius'),
-  message: z.string(),
+  repo: z.string(),
+  pr: z.number().int(),
+  summary: z.string(),
+  index_state: z.enum(['full', 'partial', 'degraded', 'failed']),
+  partial: z.boolean(),
+  reason: z.string().nullable(),
+  summary_generated: z.boolean(),
+  changed_symbols: z.array(z.string()),
+  downstream: z.array(
+    z.object({
+      symbol: z.string(),
+      callers: z.array(z.string()),
+      callers_shown: z.number().int(),
+      callers_total: z.number().int(),
+      endpoints: z.array(z.string()),
+      crons: z.array(z.string()),
+    }),
+  ),
 });
 
-const PAYLOAD = {
-  status: 'not_implemented' as const,
-  feature: 'blast_radius' as const,
-  message:
-    'get_blast_radius is not implemented yet. It is registered so the tool surface stays stable, and will return impacted symbols and callers in a later DevDigest release. For risk signals on this PR today, use get_findings (or run_agent_on_pr if it has not been reviewed).',
-};
+export function getBlastRadiusTool(deps: ToolDeps): ToolDef {
+  const handler = async (args: Record<string, unknown>): Promise<CallToolResult> => {
+    const { repo, pr } = inputSchema.parse(args);
 
-export function getBlastRadiusTool(_deps: ToolDeps): ToolDef {
-  // Makes no HTTP call at all — it does not even resolve repo/pr (no point
-  // validating inputs it will not use, and resolution costs a GitHub round-trip).
-  const handler = async (): Promise<CallToolResult> => ok(PAYLOAD);
+    let pullId: string;
+    try {
+      const repoRes = await deps.resolver.resolveRepo(repo);
+      if (!repoRes.ok) return toolError(repoMissMessage(repo, repoRes));
+      const pullRes = await deps.resolver.resolvePull(repoRes.repoId, pr);
+      if (!pullRes.ok) return toolError(pullMissMessage(repo, pr, pullRes));
+      pullId = pullRes.pullId;
+    } catch (err) {
+      return apiErrorToToolResult(err, 'looking up the pull request');
+    }
+
+    let blast;
+    try {
+      blast = await deps.client.get(`/pulls/${seg(pullId)}/blast`, BlastRadiusView);
+    } catch (err) {
+      return apiErrorToToolResult(err, 'reading the blast radius');
+    }
+
+    return ok({ repo, pr, ...compactBlast(blast) });
+  };
 
   return {
     name: 'get_blast_radius',

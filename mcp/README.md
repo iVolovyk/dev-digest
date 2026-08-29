@@ -35,7 +35,7 @@ tool returns:
 | `run_agent_on_pr` | Review this PR with this agent — **one call**. Creates the run, waits for it to finish, returns compact findings. Takes up to several minutes. |
 | `get_findings` | The findings from the most recent completed review of a PR. |
 | `get_conventions` | The coding conventions DevDigest has already extracted for a repo. **Cache-only** — never triggers extraction. |
-| `get_blast_radius` | Registered and discoverable, returns a structured `not_implemented`. Reserved for a later release. |
+| `get_blast_radius` | Impact map for a PR: which symbols changed, who calls them, and which HTTP endpoints / cron jobs sit downstream. Read-only, served from the repo index. |
 
 All arguments are flat primitives: `repo` (`"owner/name"`), `pr` (number),
 `agent` (name or id). Never a nested object.

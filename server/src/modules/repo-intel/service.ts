@@ -39,6 +39,8 @@ import type {
   RefRow,
   RepoIntel,
   RepoMapResult,
+  ReverseDependentRow,
+  ReverseDependentsResult,
   SignatureRow,
   SymbolRow,
 } from './types.js';
@@ -48,6 +50,7 @@ import {
   INDEX_JOB_KIND,
   INDEXER_VERSION,
   MAX_CALLERS_PER_SYMBOL,
+  MAX_REVERSE_DEPENDENTS,
   REFRESH_JOB_KIND,
   RESYNC_JOB_KIND,
   SUPPORTED_EXT,
@@ -388,6 +391,81 @@ export class RepoIntelService implements RepoIntel {
       factsByFile,
       degraded: false,
     };
+  }
+
+  /**
+   * Bounded reverse-import walk — "who depends on these files?" — with each
+   * dependent file's precomputed `file_facts` (endpoints/crons) attached.
+   * One indexed query per BFS level (`getImportersOf`, served by
+   * `file_edges_repo_to_idx`), at most `BFS_DEPTH` levels.
+   *
+   * DEPTH 2 IS A READABILITY HEURISTIC, NOT A PROVEN BOUND. The classic
+   * `change → repository → service → controller → route` chain is four hops,
+   * so a change deep in a data layer can miss its route here. It is bounded
+   * anyway because an unbounded reverse closure in a hub-and-spoke repo
+   * reaches essentially everything and carries no signal (cf. Bazel `rdeps`).
+   *
+   * KNOWN FALSE-NEGATIVE SOURCES in TS/JS (all deflate the map — the
+   * dangerous direction; blast's UI must never read an empty map as "nothing
+   * else is touched"):
+   *   - Barrel files: `index.ts` re-exports create edges the walk cannot tell
+   *     apart from real use, inflating fan-out; conversely a consumer that
+   *     imports a symbol NOT through the barrel is still counted.
+   *   - Dynamic dispatch / DI: `container.resolve(token)` and string-keyed
+   *     route/job tables are not import edges — the walk never sees them.
+   *   - String-keyed job kinds: `jobs.enqueue(ws, RESYNC_JOB_KIND, …)` links
+   *     to a handler registered elsewhere with no import between them.
+   */
+  async getReverseDependents(
+    repoId: string,
+    files: string[],
+    depth: number = BFS_DEPTH,
+  ): Promise<ReverseDependentsResult> {
+    if (!this.container.config.repoIntelEnabled) {
+      return { dependents: [], truncated: false, degraded: true, reason: 'flag_off' };
+    }
+    if (files.length === 0) return { dependents: [], truncated: false };
+
+    const maxDepth = Math.max(0, Math.min(depth, BFS_DEPTH));
+
+    const seen = new Set<string>(files);
+    const rowsByFile = new Map<string, ReverseDependentRow>();
+    for (const f of files) {
+      rowsByFile.set(f, { file: f, depth: 0, endpoints: [], crons: [] });
+    }
+
+    let frontier = [...files];
+    let truncated = false;
+
+    for (let d = 1; d <= maxDepth; d += 1) {
+      const importers = await this.repo.getImportersOf(repoId, frontier);
+      let next = importers.filter((f) => !seen.has(f));
+      if (next.length === 0) break;
+
+      if (seen.size + next.length > MAX_REVERSE_DEPENDENTS) {
+        next = next.slice(0, Math.max(0, MAX_REVERSE_DEPENDENTS - seen.size));
+        truncated = true;
+      }
+      for (const f of next) {
+        seen.add(f);
+        rowsByFile.set(f, { file: f, depth: d, endpoints: [], crons: [] });
+      }
+      frontier = next;
+      if (truncated || frontier.length === 0) break;
+    }
+
+    // One facts read for every file in the walk (depth 0 included — a changed
+    // route file's OWN endpoints are impacted and must not be missed).
+    const facts = await this.repo.getFileFacts(repoId, [...rowsByFile.keys()]);
+    for (const f of facts) {
+      const row = rowsByFile.get(f.filePath);
+      if (row) {
+        row.endpoints = f.endpoints;
+        row.crons = f.crons;
+      }
+    }
+
+    return { dependents: [...rowsByFile.values()], truncated };
   }
 
   /**

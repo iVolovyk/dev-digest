@@ -14,7 +14,9 @@ const DESCRIPTIONS: Record<string, string> = {
   get_conventions:
     'Get the coding conventions DevDigest has already extracted for a repo. Read-only — this never triggers extraction.',
   get_blast_radius:
-    "Not implemented yet. Reserved for impact analysis of a PR's changes (which symbols and callers it affects).",
+    'Get the blast radius of a pull request: which symbols changed, who calls them, ' +
+    'and which HTTP endpoints and cron jobs sit downstream. Read-only; served from ' +
+    'the repository index.',
 };
 
 const ORDER = ['list_agents', 'run_agent_on_pr', 'get_findings', 'get_conventions', 'get_blast_radius'];
