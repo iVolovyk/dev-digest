@@ -4,7 +4,7 @@ Local-first AI PR review — course starter. Full picture → README.md.
 
 ## Stack
 Node ≥22 · pnpm ≥10 · Docker (Postgres/pgvector).
-NOT a monorepo — 4 standalone packages, own package.json/lockfile each,
+NOT a monorepo — 5 standalone packages, own package.json/lockfile each,
 cross-package sharing via tsconfig path aliases (not published modules).
 
 ## Build/test
@@ -18,6 +18,7 @@ Per-package: `pnpm dev` / `pnpm test` / `pnpm typecheck` (run from that package'
 | client/ | @devdigest/web | Next.js 15 studio | 3002 |
 | reviewer-core/ | @devdigest/reviewer-core | pure review engine | — |
 | e2e/ | @devdigest/e2e | deterministic browser e2e | — |
+| mcp/ | @devdigest/mcp | local MCP server (stdio) over the running API | — |
 
 ## Non-default conventions
 - Secrets (API keys, GITHUB_TOKEN) live in `~/.devdigest/secrets.json` (0600) —

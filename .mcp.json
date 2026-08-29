@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "devdigest": {
+      "command": "pnpm",
+      "args": ["--dir", "/Users/ihorvolovyk/Documents/Learn.nosync/dev-digest/mcp", "start"],
+      "env": { "DEVDIGEST_API_BASE": "http://localhost:3001" }
+    }
+  }
+}
